@@ -1,7 +1,7 @@
 const crypto = require('crypto');
 const { sign, parseCookies, encryptSession } = require('./auth-utils.cjs');
 
-const PRODUCTION_APP_URL = 'https://venta-catalog-studio-app.vercel.app';
+const PRODUCTION_APP_URL = 'https://catalog.ventajewelry.com';
 
 function timingSafeEqualString(a, b) {
   const aa = Buffer.from(a || '');
