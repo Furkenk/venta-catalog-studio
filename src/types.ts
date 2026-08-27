@@ -6,12 +6,13 @@ export type LayoutId=
   |'LAYOUT_P_IMAGE_4_PRODUCTS'|'LAYOUT_Q_SPLIT_EDITORIAL'|'LAYOUT_R_PRODUCT_WALL'
   |'LAYOUT_S_MAGAZINE'|'LAYOUT_T_PRODUCT_INDEX'|'COVER'|'BACK_COVER';
 export type PageBlockType='image'|'product'|'text'|'frame';
+export interface ProductInfoSettings{showName:boolean;showSku:boolean;showPrice:boolean;showMaterial:boolean;showCategory:boolean;showDescription:boolean;position:'below'|'overlay'|'left'|'right';align:'left'|'center'|'right';fontFamily?:string;fontSize?:number;color?:string;pricePrefix?:string;lineGap?:number;}
 export interface PageBlock{
   id:string; type:PageBlockType; url?:string; productId?:string; linkUrl?:string; showQr?:boolean; alt?:string;
   x?:number;y?:number;width?:number;height?:number;zIndex?:number;objectFit?:'cover'|'contain';
   imageScale?:number; imagePositionX?:number; imagePositionY?:number;
   fontFamily?:string;fontSize?:number;fontWeight?:number;fontStyle?:'normal'|'italic';textAlign?:'left'|'center'|'right';
-  textColor?:string; frameKind?:'image'|'product'; borderWidth?:number;borderRadius?:number;
+  textColor?:string; frameKind?:'image'|'product'; borderWidth?:number;borderRadius?:number;productInfo?:ProductInfoSettings;
 }
 export interface CatalogSettings{
   pageWidth:number;pageHeight:number;unit:'mm'|'px'|'in';showHeader:boolean;headerText:string;showPageNumbers:boolean;
@@ -20,8 +21,8 @@ export interface CatalogSettings{
 }
 export interface Catalog{id:string;name:string;description:string;coverImage:string;logoUrl?:string;createdAt:string;updatedAt:string;
   status:'draft'|'published';theme:{primaryColor:string;secondaryColor:string;serifFont:string;sansFont:string};settings?:CatalogSettings}
-export interface Product{id:string;name:string;description:string;price:number;sku:string;material:string;images:string[];category:string;categoryId?:string;
-  collectionId:string;collectionIds?:string[];collectionNames?:string[];handle?:string;url?:string|null;tags?:string[];variants?:any[]}
+export interface Product{id:string;name:string;description:string;price:number;sku:string;material:string;images:string[];category:string;categoryId?:string;categoryFullName?:string;
+  collectionId:string;collectionIds?:string[];collectionNames?:string[];handle?:string;url?:string|null;tags?:string[];productType?:string;variants?:any[]}
 export interface Collection{id:string;name:string;season:string;description:string;heroImage:string}
 export interface Page{
   id:string;catalogId:string;order:number;layoutId:LayoutId;title:string;
