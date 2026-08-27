@@ -1,42 +1,27 @@
 import React from 'react';
+import { ArrowRight, Check, Loader2, RefreshCw } from 'lucide-react';
 import { Catalog, Page, Product } from './types';
 import { mockCatalog, mockPages, mockProducts } from './mockData';
 import { CatalogReader } from './components/reader/CatalogReader';
 import { CatalogStudio } from './components/studio/CatalogStudio';
-import { motion, AnimatePresence } from 'motion/react';
-import { Label, Sans } from './components/shared/Typography';
-import { ArrowLeft } from 'lucide-react';
+import { Label, Serif, Sans } from './components/shared/Typography';
+import { connectShopify, fetchShopifyProducts, getShopifyStatus, loadCatalogState, saveCatalogState } from './lib/shopify';
 
-export default function App() {
-  const [view, setView] = React.useState<'home' | 'reader' | 'studio'>('home');
-  const [catalog] = React.useState<Catalog>(mockCatalog);
-  const [pages, setPages] = React.useState<Page[]>(mockPages);
-  const [products] = React.useState<Product[]>(mockProducts);
+const LogoSlot:React.FC<{src?:string;dark?:boolean;className?:string}>=({src,dark=false,className=''})=><div className={`flex items-center justify-center overflow-hidden ${dark?'text-white/60 border-white/15':'text-black/30 border-black/10'} ${className}`}>{src?<img src={src} alt="Brand logo" className="max-h-full max-w-full object-contain"/>:<div className="w-7 h-7 border border-current/40 rotate-45"/>}</div>;
 
-  const handleUpdatePage = (updatedPage: Page) => setPages(prev => prev.map(p => p.id === updatedPage.id ? updatedPage : p));
-  const handleAddPage = () => {
-    const newPage: Page = { id: Math.random().toString(36).substr(2, 9), catalogId: catalog.id, order: pages.length, layoutId: 'LAYOUT_A_FULL_BLEED', title: 'New Page', content: {} };
-    setPages(prev => [...prev, newPage]);
-  };
-  const handleDeletePage = (id: string) => setPages(prev => prev.filter(p => p.id !== id));
-
-  return <div className="min-h-screen bg-white">
-    <AnimatePresence mode="wait">
-      {view === 'home' && <motion.div key="home" initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} className="h-screen flex items-center justify-center p-8 bg-[#050505] text-white">
-        <div className="max-w-5xl w-full grid grid-cols-1 md:grid-cols-2 gap-16 items-center">
-          <div className="space-y-12">
-            <div className="space-y-6">
-              <div className="flex items-center gap-4"><div className="w-12 h-px bg-white/30"/><Label className="mb-0 text-white/70">Spring / Summer 2027</Label></div>
-              <h1 className="text-7xl md:text-9xl font-serif italic tracking-tighter leading-[0.8]">Aura</h1>
-              <Sans className="text-base md:text-xl font-light text-white/50 leading-relaxed max-w-md">A professional studio for digital luxury editorial and interactive publication design.</Sans>
-            </div>
-            <div className="flex gap-8 items-center"><button onClick={()=>setView('reader')} className="group flex items-center gap-4 text-xs uppercase tracking-[0.3em] font-bold"><span className="border-b border-white pb-1">Open Publication</span></button><button onClick={()=>setView('studio')} className="px-10 py-5 bg-white text-black text-[10px] uppercase tracking-[0.4em] font-bold hover:bg-neutral-200">Studio Access</button></div>
-          </div>
-          <div className="aspect-[4/5] bg-neutral-900 relative overflow-hidden shadow-2xl"><img src={catalog.coverImage} className="w-full h-full object-cover grayscale brightness-75" alt="Catalog Cover"/><div className="absolute inset-0 bg-black/20"/></div>
-        </div>
-      </motion.div>}
-      {view === 'reader' && <motion.div key="reader" initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}><div className="fixed top-8 left-8 z-[110]"><button onClick={()=>setView('home')} className="p-2 bg-white/80 backdrop-blur rounded-full shadow-sm"><ArrowLeft size={16}/></button></div><CatalogReader catalog={catalog} pages={[...pages].sort((a,b)=>a.order-b.order)} products={products}/></motion.div>}
-      {view === 'studio' && <motion.div key="studio" initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}><CatalogStudio catalog={catalog} pages={[...pages].sort((a,b)=>a.order-b.order)} products={products} onUpdatePage={handleUpdatePage} onAddPage={handleAddPage} onDeletePage={handleDeletePage} onExit={()=>setView('home')}/></motion.div>}
-    </AnimatePresence>
-  </div>;
+export default function App(){
+ const [view,setView]=React.useState<'home'|'reader'|'studio'>('home');
+ const [catalog,setCatalog]=React.useState<Catalog>(mockCatalog); const [pages,setPages]=React.useState<Page[]>(mockPages); const [products,setProducts]=React.useState<Product[]>(mockProducts);
+ const [connected,setConnected]=React.useState(false); const [shop,setShop]=React.useState(''); const [shopInput,setShopInput]=React.useState(''); const [loading,setLoading]=React.useState(true); const [syncing,setSyncing]=React.useState(false); const [saving,setSaving]=React.useState(false); const [error,setError]=React.useState('');
+ const hydrate=React.useCallback(async()=>{setLoading(true);try{const status=await getShopifyStatus();setConnected(status.connected);if(status.shop)setShop(status.shop);if(status.connected){const [pd,cs]=await Promise.all([fetchShopifyProducts(),loadCatalogState()]);setProducts(pd.products);if(pd.shop)setShop(pd.shop);if(cs){setCatalog(cs.catalog);if(cs.pages?.length)setPages(cs.pages);}}}catch(e:any){setError(e.message||'Shopify bağlantısı kurulamadı.')}finally{setLoading(false)}},[]);
+ React.useEffect(()=>{const p=new URLSearchParams(location.search),s=p.get('shop');if(s)setShopInput(s);hydrate()},[hydrate]);
+ React.useEffect(()=>{if(!connected||loading)return;const t=window.setTimeout(async()=>{setSaving(true);try{await saveCatalogState({...catalog,updatedAt:new Date().toISOString()},pages)}catch(e:any){setError(e.message||'Katalog kaydedilemedi.')}finally{setSaving(false)}},900);return()=>clearTimeout(t)},[catalog,pages,connected,loading]);
+ const refresh=async()=>{if(!connected)return;setSyncing(true);setError('');try{const d=await fetchShopifyProducts();setProducts(d.products);setShop(d.shop)}catch(e:any){setError(e.message||'Ürünler yenilenemedi.')}finally{setSyncing(false)}};
+ const updatePage=(p:Page)=>setPages(x=>x.map(y=>y.id===p.id?p:y)); const addPage=()=>setPages(x=>[...x,{id:crypto.randomUUID(),catalogId:catalog.id,order:x.length,layoutId:'LAYOUT_A_FULL_BLEED',title:`Page ${x.length+1}`,content:{}}]); const delPage=(id:string)=>setPages(x=>x.filter(p=>p.id!==id).map((p,i)=>({...p,order:i})));
+ if(view==='reader')return <CatalogReader catalog={catalog} pages={[...pages].sort((a,b)=>a.order-b.order)} products={products} onExit={()=>setView('home')}/>;
+ if(view==='studio')return <CatalogStudio catalog={catalog} pages={[...pages].sort((a,b)=>a.order-b.order)} products={products} onUpdatePage={updatePage} onAddPage={addPage} onDeletePage={delPage} onExit={()=>setView('home')}/>;
+ return <div className="min-h-screen bg-[#050505] text-white"><header className="h-20 px-8 lg:px-12 flex items-center justify-between border-b border-white/10"><div className="flex items-center gap-4"><LogoSlot src={catalog.logoUrl} dark className="w-10 h-10 border"/><span className="text-[10px] tracking-[0.35em] uppercase text-white/50">Catalog Studio</span></div>{connected&&<div className="flex items-center gap-4 text-[10px] uppercase tracking-[0.2em] text-white/45"><span className="flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-emerald-400"/>{shop}</span><span>{products.length} products</span></div>}</header>
+ <main className="min-h-[calc(100vh-80px)] flex items-center justify-center px-8 py-16"><div className="w-full max-w-6xl grid lg:grid-cols-[1.05fr_.95fr] gap-16 items-center"><section className="space-y-12"><div className="space-y-6"><Label className="text-white/40">Digital Commerce Editorial System</Label><div className="flex items-center gap-6"><LogoSlot src={catalog.logoUrl} dark className="w-24 h-24 border border-white/15"/><div className="h-px flex-1 bg-white/10"/></div><h1 className="text-6xl md:text-8xl font-serif italic tracking-[-0.06em] leading-[0.82]">Catalog<br/>Studio</h1><Sans className="text-base md:text-lg font-light text-white/50 leading-relaxed max-w-lg">Build premium interactive e-catalogs directly from your Shopify products, then refine every page with an editorial workflow.</Sans></div>
+ {!connected?<div className="max-w-lg border border-white/10 bg-white/[0.03] p-6 space-y-5"><div><p className="text-xs font-medium">Connect your Shopify store</p><p className="text-[10px] text-white/40 mt-1">Products, images, SKUs and prices will be pulled from Shopify.</p></div><div className="flex gap-2"><input value={shopInput} onChange={e=>setShopInput(e.target.value)} placeholder="your-store.myshopify.com" className="flex-1 bg-white/[0.05] border border-white/10 px-4 py-3 text-xs outline-none focus:border-white/30"/><button onClick={()=>connectShopify(shopInput)} disabled={!shopInput.trim()} className="px-5 bg-white text-black text-[10px] uppercase tracking-[0.18em] font-bold disabled:opacity-30">Connect</button></div>{error&&<p className="text-[10px] text-red-300">{error}</p>}</div>:<div className="flex flex-wrap gap-3"><button onClick={()=>setView('studio')} className="px-7 py-4 bg-white text-black text-[10px] uppercase tracking-[0.25em] font-bold flex items-center gap-3">Open Studio <ArrowRight size={14}/></button><button onClick={()=>setView('reader')} className="px-7 py-4 border border-white/15 text-white text-[10px] uppercase tracking-[0.25em] font-bold">Preview Catalog</button><button onClick={refresh} className="px-4 py-4 border border-white/10 text-white/50">{syncing?<Loader2 size={15} className="animate-spin"/>:<RefreshCw size={15}/>}</button></div>}
+ {loading&&<div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.2em] text-white/30"><Loader2 size={13} className="animate-spin"/>Loading</div>}{connected&&!loading&&<div className="flex items-center gap-3 text-[10px] uppercase tracking-[0.18em] text-white/35"><Check size={13}/>Shopify connected</div>}{connected&&error&&<p className="text-[10px] text-red-300">{error}</p>}</section><section className="relative aspect-[4/5] max-h-[720px] bg-neutral-900 overflow-hidden border border-white/10"><img src={catalog.coverImage} className="w-full h-full object-cover grayscale brightness-[.65]" alt="Catalog cover"/><div className="absolute inset-0 bg-gradient-to-t from-black via-black/10 to-transparent"/><div className="absolute left-8 right-8 bottom-8 flex items-end justify-between"><div><Label className="text-white/50">Current catalog</Label><Serif className="text-3xl italic text-white">{catalog.name}</Serif></div><div className="text-[9px] uppercase tracking-[0.2em] text-white/40">{pages.length} pages</div></div></section></div></main></div>;
 }
