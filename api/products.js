@@ -1,38 +1,8 @@
 const crypto = require('crypto');
-const { parseCookies } = require('./auth');
-
-function getKey() {
-  const secret = process.env.SHOPIFY_SESSION_SECRET || process.env.SHOPIFY_API_SECRET;
-  if (!secret) throw new Error('Session secret is not configured');
-  return crypto.createHash('sha256').update(secret).digest();
-}
-function decryptSession(value) {
-  const [iv64, tag64, data64] = String(value || '').split('.');
-  if (!iv64 || !tag64 || !data64) return null;
-  try {
-    const decipher = crypto.createDecipheriv('aes-256-gcm', getKey(), Buffer.from(iv64, 'base64url'));
-    decipher.setAuthTag(Buffer.from(tag64, 'base64url'));
-    return JSON.parse(Buffer.concat([decipher.update(Buffer.from(data64, 'base64url')), decipher.final()]).toString('utf8'));
-  } catch { return null; }
-}
-function getSession(req) { return decryptSession(parseCookies(req.headers.cookie || '').venta_shopify_session); }
-async function shopifyGraphql(session, query, variables = {}) {
-  const response = await fetch(`https://${session.shop}/admin/api/2026-07/graphql.json`, { method:'POST', headers:{'Content-Type':'application/json','X-Shopify-Access-Token':session.accessToken}, body:JSON.stringify({query,variables}) });
-  const json = await response.json();
-  if (!response.ok || json.errors) throw new Error(json.errors?.map(e=>e.message).join('; ') || 'Shopify API request failed');
-  return json.data;
-}
-function normalizeProduct(p) {
-  const variant = p.variants?.nodes?.[0];
-  return { id:p.id, name:p.title, description:p.descriptionHtml||'', price:Number(variant?.price||0), sku:variant?.sku||'', material:p.vendor||'', images:p.images?.nodes?.map(i=>i.url).filter(Boolean)||[], category:p.productType||'Products', collectionId:p.collections?.nodes?.[0]?.id||'', handle:p.handle, url:p.onlineStoreUrl||null, tags:p.tags||[], variants:p.variants?.nodes||[] };
-}
-module.exports = async (req,res)=>{
-  try {
-    if(req.method!=='GET') return res.status(405).json({error:'Method not allowed'});
-    const session=getSession(req);
-    if(!session?.shop||!session?.accessToken) return res.status(401).json({connected:false,error:'Shopify bağlantısı gerekli.'});
-    const query=`query CatalogProducts($first:Int!,$after:String){ shop{name primaryDomain{host} } products(first:$first,after:$after,sortKey:TITLE){ nodes{id title handle descriptionHtml productType vendor tags onlineStoreUrl images(first:10){nodes{id url altText}} variants(first:20){nodes{id title sku price compareAtPrice inventoryQuantity}} collections(first:5){nodes{id title}}} pageInfo{hasNextPage endCursor}} }`;
-    const data=await shopifyGraphql(session,query,{first:100,after:null});
-    return res.status(200).json({connected:true,shop:session.shop,shopName:data.shop.name,primaryDomain:data.shop.primaryDomain?.host||null,products:data.products.nodes.map(normalizeProduct),pageInfo:data.products.pageInfo});
-  } catch(error){ console.error(error); return res.status(500).json({connected:false,error:error.message||'Shopify products could not be loaded.'}); }
-};
+const { parseCookies } = require('./auth-utils');
+function getKey() { const secret=process.env.SHOPIFY_SESSION_SECRET||process.env.SHOPIFY_API_SECRET; if(!secret)throw new Error('Session secret is not configured'); return crypto.createHash('sha256').update(secret).digest(); }
+function decryptSession(value) { const [iv64,tag64,data64]=String(value||'').split('.'); if(!iv64||!tag64||!data64)return null; try { const d=crypto.createDecipheriv('aes-256-gcm',getKey(),Buffer.from(iv64,'base64url')); d.setAuthTag(Buffer.from(tag64,'base64url')); return JSON.parse(Buffer.concat([d.update(Buffer.from(data64,'base64url')),d.final()]).toString('utf8')); } catch { return null; } }
+function getSession(req){return decryptSession(parseCookies(req.headers.cookie||'').venta_shopify_session)}
+async function shopifyGraphql(session,query,variables={}) { const r=await fetch(`https://${session.shop}/admin/api/2026-07/graphql.json`,{method:'POST',headers:{'Content-Type':'application/json','X-Shopify-Access-Token':session.accessToken},body:JSON.stringify({query,variables})}); const json=await r.json(); if(!r.ok||json.errors)throw new Error(json.errors?.map(e=>e.message).join('; ')||'Shopify API request failed'); return json.data; }
+function normalizeProduct(p){const variant=p.variants?.nodes?.[0];return{id:p.id,name:p.title,description:p.descriptionHtml||'',price:Number(variant?.price||0),sku:variant?.sku||'',material:p.vendor||'',images:p.images?.nodes?.map(i=>i.url).filter(Boolean)||[],category:p.productType||'Products',collectionId:p.collections?.nodes?.[0]?.id||'',handle:p.handle,url:p.onlineStoreUrl||null,tags:p.tags||[],variants:p.variants?.nodes||[]};}
+module.exports=async(req,res)=>{try{if(req.method!=='GET')return res.status(405).json({error:'Method not allowed'});const s=getSession(req);if(!s?.shop||!s?.accessToken)return res.status(401).json({connected:false,error:'Shopify bağlantısı gerekli.'});const query=`query{shop{name primaryDomain{host}} products(first:100,sortKey:TITLE){nodes{id title handle descriptionHtml productType vendor tags onlineStoreUrl images(first:10){nodes{id url altText}} variants(first:20){nodes{id title sku price compareAtPrice inventoryQuantity}} collections(first:5){nodes{id title}}} pageInfo{hasNextPage endCursor}}}`;const data=await shopifyGraphql(s,query);return res.status(200).json({connected:true,shop:s.shop,shopName:data.shop.name,primaryDomain:data.shop.primaryDomain?.host||null,products:data.products.nodes.map(normalizeProduct),pageInfo:data.products.pageInfo});}catch(error){console.error(error);return res.status(500).json({connected:false,error:error.message||'Shopify products could not be loaded.'});}};
