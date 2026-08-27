@@ -2,7 +2,7 @@ const { sign } = require('./auth-utils.cjs');
 const crypto = require('crypto');
 
 // Keep OAuth callbacks on the single production URL whitelisted in Shopify.
-const PRODUCTION_APP_URL = 'https://venta-catalog-studio-app.vercel.app';
+const PRODUCTION_APP_URL = 'https://catalog.ventajewelry.com';
 
 module.exports = async (req, res) => {
   try {
