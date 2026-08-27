@@ -1,1 +1,1 @@
-export {PageRenderer2 as PageRenderer} from './PageRenderer2';
+export {PageRenderer3 as PageRenderer} from './PageRenderer3';
