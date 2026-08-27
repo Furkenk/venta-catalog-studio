@@ -1,5 +1,9 @@
 const { sign } = require('./auth-utils.cjs');
 const crypto = require('crypto');
+
+// Keep OAuth callbacks on the single production URL whitelisted in Shopify.
+const PRODUCTION_APP_URL = 'https://venta-catalog-studio-app.vercel.app';
+
 module.exports = async (req, res) => {
   try {
     if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
@@ -8,9 +12,7 @@ module.exports = async (req, res) => {
     const apiKey = process.env.SHOPIFY_API_KEY;
     if (!apiKey) return res.status(500).json({ error: 'SHOPIFY_API_KEY Vercel Environment Variables içinde eksik.' });
     const scopes = process.env.SHOPIFY_SCOPES || 'read_products,write_metafields';
-    const host = String(req.headers.host || '').split(':')[0];
-    const appUrl = process.env.APP_URL || `https://${host}`;
-    const redirectUri = `${appUrl}/api/callback`;
+    const redirectUri = `${PRODUCTION_APP_URL}/api/callback`;
     const state = crypto.randomBytes(24).toString('hex');
     const signature = sign(state);
     res.setHeader('Set-Cookie', `shopify_oauth_state=${state}.${signature}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=600`);
