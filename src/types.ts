@@ -17,16 +17,18 @@ export interface PageBlock{
 export interface CatalogSettings{
   pageWidth:number;pageHeight:number;unit:'mm'|'px'|'in';showHeader:boolean;headerText:string;showPageNumbers:boolean;
   pageNumberPosition:'top-left'|'top-center'|'top-right'|'bottom-left'|'bottom-center'|'bottom-right';
+  showFooter:boolean;footerText:string;footerPageNumbers:boolean;footerPosition:'left'|'center'|'right';
   marginTop:number;marginRight:number;marginBottom:number;marginLeft:number;showBorder:boolean;backgroundColor:string;
 }
 export interface Catalog{id:string;name:string;description:string;coverImage:string;logoUrl?:string;createdAt:string;updatedAt:string;
   status:'draft'|'published';theme:{primaryColor:string;secondaryColor:string;serifFont:string;sansFont:string};settings?:CatalogSettings}
-export interface Product{id:string;name:string;description:string;price:number;sku:string;material:string;images:string[];category:string;categoryId?:string;categoryFullName?:string;
+export interface Product{id:string;name:string;description:string;price:number;sku:string;material:string;images:string[];karat?:number;category:string;categoryId?:string;categoryFullName?:string;
   collectionId:string;collectionIds?:string[];collectionNames?:string[];handle?:string;url?:string|null;tags?:string[];productType?:string;variants?:any[]}
 export interface Collection{id:string;name:string;season:string;description:string;heroImage:string}
 export interface Page{
   id:string;catalogId:string;order:number;layoutId:LayoutId;title:string;
   content:{images?:string[];productIds?:string[];blocks?:PageBlock[];headline?:string;subheadline?:string;body?:string;quote?:string;hotspots?:Hotspot[]};
-  style?:{backgroundColor?:string;backgroundImage?:string;textColor?:string;customMargins?:string;overlayOpacity?:number;fontFamily?:string;fontSize?:number;lineHeight?:number};
+  style?:{backgroundColor?:string;backgroundImage?:string;textColor?:string;customMargins?:string;overlayOpacity?:number;fontFamily?:string;fontSize?:number;lineHeight?:number;
+    showHeader?:boolean;headerText?:string;showFooter?:boolean;footerText?:string;showPageNumber?:boolean;pageNumberPosition?:CatalogSettings['pageNumberPosition']};
 }
 export interface Hotspot{productId:string;x:number;y:number}
