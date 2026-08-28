@@ -12,7 +12,7 @@ export interface PageBlock{
   x?:number;y?:number;width?:number;height?:number;zIndex?:number;objectFit?:'cover'|'contain';
   imageScale?:number; imagePositionX?:number; imagePositionY?:number;
   fontFamily?:string;fontSize?:number;fontWeight?:number;fontStyle?:'normal'|'italic';textAlign?:'left'|'center'|'right';
-  textColor?:string; frameKind?:'image'|'product'; borderWidth?:number;borderRadius?:number;productInfo?:ProductInfoSettings;
+  textColor?:string; frameKind?:'image'|'product'; borderWidth?:number;borderRadius?:number;borderColor?:string;productInfo?:ProductInfoSettings;
   locked?:boolean;fitMode?:'cover'|'contain';
 }
 export interface CatalogSettings{
@@ -20,7 +20,7 @@ export interface CatalogSettings{
   pageNumberPosition:'top-left'|'top-center'|'top-right'|'bottom-left'|'bottom-center'|'bottom-right';
   showFooter:boolean;footerText:string;footerPageNumbers:boolean;footerPosition:'left'|'center'|'right';
   marginTop:number;marginRight:number;marginBottom:number;marginLeft:number;showBorder:boolean;backgroundColor:string;
-  gridSize?:number;gridVisible?:boolean;gridSnap?:boolean;
+  gridSize?:number;gridVisible?:boolean;gridSnap?:boolean;headerPosition?:'left'|'center'|'right';productInfoDefaults?:ProductInfoSettings;
 }
 export interface Catalog{id:string;name:string;description:string;coverImage:string;logoUrl?:string;createdAt:string;updatedAt:string;
   status:'draft'|'published';theme:{primaryColor:string;secondaryColor:string;serifFont:string;sansFont:string};settings?:CatalogSettings}
