@@ -7,6 +7,54 @@ const write=(f,s)=>fs.writeFileSync(path.join(root,f),s);
 {
  const f='src/components/studio/CatalogStudioFinal.tsx'; let s=read(f);
  s=s.replace('function buildBlocks(layout:LayoutId,ids:string[],preset?:GridPreset):PageBlock[]','export function buildBlocks(layout:LayoutId,ids:string[],preset?:GridPreset):PageBlock[]');
+
+ // A layout click is a page-local operation. If the selected page has more
+ // products than the new layout can hold, only the overflow is pushed forward
+ // through existing pages, while every following page keeps its own layout.
+ const marker=' const selectLayout=(layout:LayoutId)=>{';
+ const helper=` const applyLayoutToPage=(sourcePages:Page[],pageIndex:number,layout:LayoutId,preset:GridPreset):Page[]=>{
+  const result=sourcePages.map(p=>({...p,content:{...p.content,blocks:(p.content.blocks||[]).map(b=>({...b}))}}));
+  if(pageIndex<0||pageIndex>=result.length)return result;
+  const selected=result[pageIndex];
+  const selectedIds=getProductIds(selected);
+  const cap=capacity(layout,preset);
+  const head=selectedIds.slice(0,cap);
+  let overflow=selectedIds.slice(cap);
+  result[pageIndex]={...replaceProductIds(selected,head,layout,preset),style:{...(selected.style||{}),gridPreset:preset}};
+  let cursor=pageIndex+1;
+  while(overflow.length){
+   if(cursor<result.length){
+    const target=result[cursor];
+    const targetIds=getProductIds(target);
+    const targetCap=capacity(target.layoutId,((target.style as any)?.gridPreset||12) as GridPreset);
+    const combined=[...targetIds,...overflow];
+    const keep=combined.slice(0,targetCap);
+    overflow=combined.slice(targetCap);
+    result[cursor]={...replaceProductIds(target,keep,target.layoutId,((target.style as any)?.gridPreset||12) as GridPreset),style:{...(target.style||{}),gridPreset:((target.style as any)?.gridPreset||12)}};
+    cursor++;
+   }else{
+    const template=result[result.length-1]||selected;
+    const newLayout=template.layoutId;
+    const newPreset=((template.style as any)?.gridPreset||12) as GridPreset;
+    const newIds=overflow.slice(0,capacity(newLayout,newPreset));
+    overflow=overflow.slice(newIds.length);
+    result.push({id:uid(),catalogId:template.catalogId,order:result.length,layoutId:newLayout,title:\`Page \${result.length+1}\`,style:{...(template.style||{}),gridPreset:newPreset},content:{blocks:[],productIds:[]}} as Page);
+    const np=result[result.length-1];
+    result[result.length-1]=replaceProductIds(np,newIds,newLayout,newPreset);
+    cursor++;
+   }
+  }
+  return result.map((p,i)=>({...p,order:i}));
+ };
+`;
+ if(!s.includes('const applyLayoutToPage='))s=s.replace(marker,helper+marker);
+ const oldSelect=` const selectLayout=(layout:LayoutId)=>{const start=Math.max(0,pages.findIndex(p=>p.id===page.id));const next=reflowFrom(start,currentIds,layout,gridPreset,pages);updatePages(next);setSelectedPageId(next[start]?.id||next[0]?.id||'');setSelectedBlockId(undefined);setNotice(\
+\`${'${layoutNames[layout]}'} seçildi · ürünler sayfalara dağıtıldı\\`);setTimeout(()=>setNotice(''),1800)};`;
+ const newSelect=` const selectLayout=(layout:LayoutId)=>{const index=pages.findIndex(p=>p.id===page.id);const next=applyLayoutToPage(pages,index,layout,gridPreset);updatePages(next);setSelectedPageId(page.id);setSelectedBlockId(undefined);setNotice(\\`${'${layoutNames[layout]}'} seçildi · yalnızca seçili sayfa değiştirildi\\`);setTimeout(()=>setNotice(''),1800)};`;
+ if(s.includes(oldSelect))s=s.replace(oldSelect,newSelect);
+ const oldClassic=` const applyClassic=()=>{const start=Math.max(0,pages.findIndex(p=>p.id===page.id));const next=reflowFrom(start,currentIds,'LAYOUT_C_PRODUCT_GRID',gridPreset,pages);updatePages(next);setSelectedPageId(next[start]?.id||page.id);setSelectedBlockId(undefined);setNotice(\\`${'${gridPreset}'}’li klasik grid uygulandı\\`);setTimeout(()=>setNotice(''),1800)};`;
+ const newClassic=` const applyClassic=()=>{const index=pages.findIndex(p=>p.id===page.id);const next=applyLayoutToPage(pages,index,'LAYOUT_C_PRODUCT_GRID',gridPreset);updatePages(next);setSelectedPageId(page.id);setSelectedBlockId(undefined);setNotice(\\`${'${gridPreset}'}’li klasik grid yalnızca seçili sayfaya uygulandı\\`);setTimeout(()=>setNotice(''),1800)};`;
+ if(s.includes(oldClassic))s=s.replace(oldClassic,newClassic);
  write(f,s);
 }
 
