@@ -11,27 +11,32 @@ const unique=(ids:string[])=>Array.from(new Set(ids));
 const layoutCapacity=(p:Page)=>{const id=p.layoutId as LayoutId;const n=productIdsOf(p).length;switch(id){case'LAYOUT_C_PRODUCT_GRID':return [6,9,12,16,20].includes(n)?n:12;case'LAYOUT_M_PRODUCT_GRID_12':return 12;case'LAYOUT_N_PRODUCT_GRID_16':return 16;case'LAYOUT_D_ASYMMETRIC':return 3;case'LAYOUT_O_EDITORIAL_COLLAGE':return 4;case'LAYOUT_P_IMAGE_4_PRODUCTS':return 5;case'LAYOUT_S_MAGAZINE':return 2;case'LAYOUT_B_HERO_PRODUCT':case'LAYOUT_Q_SPLIT_EDITORIAL':case'COVER':return 1;default:return Math.max(1,n||1)}};
 function decoratePage(page:Page,catalog:Catalog,index:number):Page{const s={...catalog.settings,...page.style};const blocks=(page.content.blocks||[]).filter(b=>!['__header','__footer','__page-number'].includes(b.id));if(s.showHeader)blocks.push({id:'__header',type:'text',x:6,y:1,width:88,height:4,zIndex:100,alt:s.headerText||'VENTA JEWELRY',fontFamily:'Arial, sans-serif',fontSize:6,fontStyle:'normal',textAlign:'center',textColor:BRAND,locked:true});if(s.showFooter)blocks.push({id:'__footer',type:'text',x:6,y:96,width:88,height:4,zIndex:100,alt:s.footerText||'VENTA JEWELRY',fontFamily:'Arial, sans-serif',fontSize:6,fontStyle:'normal',textAlign:'center',textColor:BRAND,locked:true});if(s.showPageNumbers)blocks.push({id:'__page-number',type:'text',x:s.pageNumberPosition?.includes('left')?4:s.pageNumberPosition?.includes('right')?86:45,y:s.pageNumberPosition?.includes('top')?1:96,width:10,height:4,zIndex:101,alt:String(index+1),fontFamily:'Arial, sans-serif',fontSize:6,fontStyle:'normal',textAlign:'center',textColor:BRAND,locked:true});return {...page,content:{...page.content,blocks}}}
 function updateInfo(page:Page,id:string,patch:Partial<PageBlock>):Page{return {...page,content:{...page.content,blocks:(page.content.blocks||[]).map(b=>b.id===id?{...b,...patch}:b)}}}
+function rebuildFromTemplate(base:Page,template:Page,ids:string[]):Page{
+ const templateBlocks=(template.content.blocks||[]).filter(b=>!b.id.startsWith('__'));
+ const productSlots=templateBlocks.filter(b=>b.frameKind==='product');
+ const nonProduct=templateBlocks.filter(b=>b.frameKind!=='product');
+ const slots=productSlots.slice(0,ids.length).map((b,i)=>({...b,id:`${b.id}-${crypto.randomUUID().slice(0,8)}`,productId:ids[i]}));
+ return {...cleanBlocks(base),layoutId:template.layoutId,content:{...base.content,productIds:ids,blocks:[...nonProduct.map(b=>({...b,id:`${b.id}-${crypto.randomUUID().slice(0,8)}`})),...slots]}};
+}
 function rebalancePages(previous:Page[],next:Page[]):Page[]{
  const prevIds=unique(previous.flatMap(productIdsOf));
  const nextIds=unique(next.flatMap(productIdsOf));
- const layoutChanged=next.some(np=>{const pp=previous.find(p=>p.id===np.id);if(!pp)return false;return pp.layoutId!==np.layoutId||productIdsOf(pp).length!==productIdsOf(np).length&&np.layoutId==='LAYOUT_C_PRODUCT_GRID'});
+ const changedIndex=Math.max(0,next.findIndex(np=>{const pp=previous.find(p=>p.id===np.id);return !!pp&&(pp.layoutId!==np.layoutId||(np.layoutId==='LAYOUT_C_PRODUCT_GRID'&&productIdsOf(pp).length!==productIdsOf(np).length));}));
+ const layoutChanged=changedIndex>=0&&next.some(np=>{const pp=previous.find(p=>p.id===np.id);return !!pp&&(pp.layoutId!==np.layoutId||(np.layoutId==='LAYOUT_C_PRODUCT_GRID'&&productIdsOf(pp).length!==productIdsOf(np).length));});
  const productAdded=nextIds.length>prevIds.length;
  if(!layoutChanged&&!productAdded)return next.map(cleanBlocks).map((p,i)=>({...p,order:i}));
  const all=unique([...prevIds,...nextIds]);
  if(!all.length)return next.map(cleanBlocks).map((p,i)=>({...p,order:i}));
- const changedIndex=Math.max(0,next.findIndex(np=>{const pp=previous.find(p=>p.id===np.id);return !!pp&&(pp.layoutId!==np.layoutId||(np.layoutId==='LAYOUT_C_PRODUCT_GRID'&&productIdsOf(pp).length!==productIdsOf(np).length));}));
- const target=cleanBlocks(next[changedIndex]||next[0]);
- const cap=layoutCapacity(target);
- const before=next.slice(0,changedIndex).map(cleanBlocks);
- const availableBases=next.slice(changedIndex).map(cleanBlocks);
+ const start=layoutChanged?changedIndex:Math.max(0,next.findIndex(p=>productIdsOf(p).length>0));
+ const template=cleanBlocks(next[start]||next[0]);
+ const cap=layoutCapacity(template);
+ const before=next.slice(0,start).map(cleanBlocks);
+ const bases=next.slice(start).map(cleanBlocks);
  const count=Math.max(1,Math.ceil(all.length/cap));
  const result=[...before];
  for(let i=0;i<count;i++){
-   const base=availableBases[i]||{id:crypto.randomUUID(),catalogId:target.catalogId,order:changedIndex+i,layoutId:target.layoutId,title:`Page ${changedIndex+i+1}`,content:{blocks:[]}} as Page;
-   const ids=all.slice(i*cap,(i+1)*cap);
-   const blocks=(base.content.blocks||[]).filter(b=>b.type==='text'&&b.id.startsWith('__')===false&&b.frameKind!=='product');
-   const rebuilt={...base,layoutId:target.layoutId,content:{...base.content,productIds:ids,blocks:[...blocks]}} as Page;
-   result.push(rebuilt);
+   const base=bases[i]||{id:crypto.randomUUID(),catalogId:template.catalogId,order:start+i,layoutId:template.layoutId,title:`Page ${start+i+1}`,content:{blocks:[]}} as Page;
+   result.push(rebuildFromTemplate(base,template,all.slice(i*cap,(i+1)*cap)));
  }
  return result.map((p,i)=>({...p,order:i}));
 }
