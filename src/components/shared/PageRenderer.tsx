@@ -3,94 +3,12 @@ import {PageRenderer3} from './PageRenderer3';
 import {PageRendererEditor} from './PageRendererEditor';
 import {Page,Product,PageBlock,CatalogSettings,LayoutId} from '../../types';
 
-function block(id:string,type:PageBlock['type'],x:number,y:number,width:number,height:number,extra:Partial<PageBlock>={}):PageBlock{
-  return {id,type,x,y,width,height,zIndex:10,...extra};
-}
-
-function productFrame(id:string,x:number,y:number,w:number,h:number,product?:Product):PageBlock{
-  return block(id,'frame',x,y,w,h,{frameKind:'product',productId:product?.id,borderWidth:1,productInfo:{showName:false,showSku:false,showPrice:false,showMaterial:false,showCategory:false,showDescription:false,position:'below',align:'left'}});
-}
-
-function imageFrame(id:string,x:number,y:number,w:number,h:number,product?:Product):PageBlock{
-  return block(id,'frame',x,y,w,h,{frameKind:'image',url:product?.images?.[0],borderWidth:1,objectFit:'cover'});
-}
-
-function textBlock(id:string,text:string,x:number,y:number,w:number,h:number,size=18):PageBlock{
-  return block(id,'text',x,y,w,h,{alt:text,fontFamily:'Georgia, serif',fontSize:size,fontStyle:'italic',textAlign:'left'});
-}
-
-function previewBlocks(layout:LayoutId,products:Product[]):PageBlock[]{
-  const p=(i:number)=>products[i%Math.max(products.length,1)];
-  const a:PageBlock[]=[];
-  switch(layout){
-    case 'COVER': a.push(imageFrame('preview-cover-image',3,3,94,94,p(0)),textBlock('preview-cover-title','NEW COLLECTION',18,40,64,12,28)); break;
-    case 'BACK_COVER': a.push(textBlock('preview-back-title','THANK YOU',20,43,60,12,28)); break;
-    case 'LAYOUT_A_FULL_BLEED': a.push(imageFrame('preview-a-image',3,3,94,78,p(0)),textBlock('preview-a-title','THE COLLECTION',8,82,62,9,22),textBlock('preview-a-copy','Editorial story',8,91,40,5,9)); break;
-    case 'LAYOUT_B_HERO_PRODUCT': a.push(productFrame('preview-b-product',4,4,55,91,p(0)),textBlock('preview-b-title','FEATURED PIECE',64,46,30,9,20),textBlock('preview-b-copy','Product story',64,59,28,7,9)); break;
-    case 'LAYOUT_C_PRODUCT_GRID': for(let i=0;i<8;i++)a.push(productFrame(`preview-c-${i}`,6+(i%4)*23,10+Math.floor(i/4)*42,19,34,p(i))); break;
-    case 'LAYOUT_D_ASYMMETRIC': a.push(imageFrame('preview-d-image',4,4,57,70,p(0)),textBlock('preview-d-title','ARCHITECTURE',66,14,29,10,20),productFrame('preview-d-p1',67,54,12,32,p(1)),productFrame('preview-d-p2',82,54,12,32,p(2))); break;
-    case 'LAYOUT_E_HERO_DETAILS': a.push(productFrame('preview-e-product',4,4,64,88,p(0)),textBlock('preview-e-title','SIGNATURE PIECE',72,58,22,9,19),textBlock('preview-e-info','SKU / MATERIAL',72,71,20,8,8)); break;
-    case 'LAYOUT_F_TWO_UP': a.push(imageFrame('preview-f-left',3,3,46,94,p(0)),imageFrame('preview-f-right',51,3,46,94,p(1))); break;
-    case 'LAYOUT_G_THREE_UP': for(let i=0;i<3;i++)a.push(imageFrame(`preview-g-${i}`,3+i*32,3,30,94,p(i))); break;
-    case 'LAYOUT_H_TYPOGRAPHIC': a.push(textBlock('preview-h-kicker','VENTA JEWELRY',10,28,80,5,8),textBlock('preview-h-title','THE NEW OBJECTS',10,38,80,17,38),textBlock('preview-h-copy','Typography-led editorial',10,60,62,8,10)); break;
-    case 'LAYOUT_I_IMAGE_TEXT': a.push(imageFrame('preview-i-image',3,3,48,94,p(0)),textBlock('preview-i-title','EDITORIAL STORY',57,42,34,10,24),textBlock('preview-i-copy','Campaign story',57,58,32,8,9)); break;
-    case 'LAYOUT_J_PRODUCT_FEATURE': for(let i=0;i<3;i++)a.push(productFrame(`preview-j-${i}`,6+i*31,16,27,68,p(i))); a.push(textBlock('preview-j-title','FEATURED',6,7,50,6,16)); break;
-    case 'LAYOUT_K_LOOK_PAGE': a.push(imageFrame('preview-k-image',3,3,94,94,p(0)),textBlock('preview-k-title','LOOK 01',8,10,40,9,22)); break;
-    case 'LAYOUT_L_COLLECTION_INDEX': a.push(textBlock('preview-l-title','COLLECTION INDEX',8,7,72,8,24)); for(let i=0;i<6;i++)a.push(productFrame(`preview-l-${i}`,8,20+i*12,84,10,p(i))); break;
-    case 'LAYOUT_M_PRODUCT_GRID_12': for(let i=0;i<12;i++)a.push(productFrame(`preview-m-${i}`,5+(i%4)*24,8+Math.floor(i/4)*30,20,24,p(i))); break;
-    case 'LAYOUT_N_PRODUCT_GRID_16': for(let i=0;i<16;i++)a.push(productFrame(`preview-n-${i}`,4+(i%4)*24,6+Math.floor(i/4)*23,20,18,p(i))); break;
-    case 'LAYOUT_O_EDITORIAL_COLLAGE': a.push(imageFrame('preview-o-main',5,5,56,65,p(0)),imageFrame('preview-o-small',65,10,28,25,p(1)),textBlock('preview-o-title','OBJECTS OF DESIRE',64,43,31,10,20),productFrame('preview-o-p1',65,76,13,18,p(2)),productFrame('preview-o-p2',80,76,13,18,p(3))); break;
-    case 'LAYOUT_P_IMAGE_4_PRODUCTS': a.push(imageFrame('preview-p-main',4,4,40,92,p(0))); for(let i=0;i<4;i++)a.push(productFrame(`preview-p-${i}`,48+(i%2)*24,8+Math.floor(i/2)*44,20,36,p(i+1))); break;
-    case 'LAYOUT_Q_SPLIT_EDITORIAL': a.push(imageFrame('preview-q-image',3,3,57,94,p(0)),textBlock('preview-q-title','EDITORIAL',66,37,28,10,25),textBlock('preview-q-copy','Build a story',66,52,26,8,9)); break;
-    case 'LAYOUT_R_PRODUCT_WALL': for(let i=0;i<9;i++)a.push(productFrame(`preview-r-${i}`,6+(i%3)*31,7+Math.floor(i/3)*31,27,26,p(i))); break;
-    case 'LAYOUT_S_MAGAZINE': a.push(imageFrame('preview-s-main',5,7,60,68,p(0)),imageFrame('preview-s-small',69,8,25,27,p(1)),textBlock('preview-s-title','VOLUME 01',68,45,26,8,20),textBlock('preview-s-copy','Objects of desire',68,58,25,8,9)); break;
-    case 'LAYOUT_T_PRODUCT_INDEX': a.push(textBlock('preview-t-title','PRODUCT INDEX',7,6,70,8,24)); for(let i=0;i<12;i++)a.push(productFrame(`preview-t-${i}`,7+(i%2)*45,18+Math.floor(i/2)*12,39,10,p(i))); break;
-  }
-  return a;
-}
-
-function blockFamily(id:string):string{
-  const m=id.match(/^(?:preview-)?([a-z]+)(?:-|$)/i);
-  return m?.[1]?.toLowerCase()||'';
-}
-
-function layoutMatchesBlocks(layout:LayoutId,blocks:PageBlock[]):boolean{
-  if(!blocks.length)return false;
-  const expected:Record<string,string>={
-    COVER:'cover',BACK_COVER:'back',LAYOUT_A_FULL_BLEED:'full',LAYOUT_B_HERO_PRODUCT:'hero-product',LAYOUT_C_PRODUCT_GRID:'grid8',LAYOUT_D_ASYMMETRIC:'asym',LAYOUT_E_HERO_DETAILS:'hero-detail',LAYOUT_F_TWO_UP:'two',LAYOUT_G_THREE_UP:'three',LAYOUT_H_TYPOGRAPHIC:'type',LAYOUT_I_IMAGE_TEXT:'image',LAYOUT_J_PRODUCT_FEATURE:'feature',LAYOUT_K_LOOK_PAGE:'look',LAYOUT_L_COLLECTION_INDEX:'index',LAYOUT_M_PRODUCT_GRID_12:'grid12',LAYOUT_N_PRODUCT_GRID_16:'grid16',LAYOUT_O_EDITORIAL_COLLAGE:'collage',LAYOUT_P_IMAGE_4_PRODUCTS:'p',LAYOUT_Q_SPLIT_EDITORIAL:'split',LAYOUT_R_PRODUCT_WALL:'wall',LAYOUT_S_MAGAZINE:'mag',LAYOUT_T_PRODUCT_INDEX:'product'
-  };
-  const wanted=expected[layout];
-  if(!wanted)return false;
-  return blocks.some(b=>{
-    const id=b.id.toLowerCase();
-    if(wanted==='hero-product'||wanted==='hero-detail')return id.startsWith(wanted);
-    if(wanted==='image')return id.startsWith('image-text-');
-    if(wanted==='p')return id.startsWith('p-');
-    if(wanted==='product')return id.startsWith('product-index-');
-    return id.startsWith(`${wanted}-`)||blockFamily(id)===wanted;
-  });
-}
-
-export function PageRenderer(props:{
-  page:Page;
-  products:Product[];
-  thumbnail?:boolean;
-  catalogSettings?:CatalogSettings;
-  editor?:boolean;
-  selectedBlockId?:string;
-  onSelectBlock?:(id:string)=>void;
-  onBlockPointerDown?:(id:string,e:React.PointerEvent)=>void;
-  onBlockResizeStart?:(id:string,e:React.PointerEvent)=>void;
-  onBlockPatch?:(id:string,p:Partial<PageBlock>)=>void;
-}){
-  const blocks=props.page.content?.blocks||[];
-  const renderPage=(props.thumbnail&&!props.editor&&!layoutMatchesBlocks(props.page.layoutId,blocks))
-    ? {...props.page,content:{...props.page.content,blocks:previewBlocks(props.page.layoutId,props.products)}}
-    : props.page;
-  const renderBlocks=renderPage.content?.blocks||[];
-  const renderKey=[renderPage.id,renderPage.layoutId,renderBlocks.length,renderBlocks.map(b=>`${b.id}:${b.type}:${b.frameKind||''}:${b.productId||''}:${b.url||''}`).join('|')].join('::');
-  if(props.editor){
-    return <PageRendererEditor key={`editor-${renderKey}`} page={renderPage} products={props.products} catalogSettings={props.catalogSettings} selectedBlockId={props.selectedBlockId} onSelectBlock={props.onSelectBlock||(()=>{})} onBlockPointerDown={props.onBlockPointerDown||(()=>{})} onBlockResizeStart={props.onBlockResizeStart||(()=>{})} onBlockPatch={props.onBlockPatch||(()=>{})}/>;
-  }
-  return <PageRenderer3 key={`view-${renderKey}`} {...props} page={renderPage}/>;
-}
+function block(id:string,type:PageBlock['type'],x:number,y:number,width:number,height:number,extra:Partial<PageBlock>={}):PageBlock{return {id,type,x,y,width,height,zIndex:10,...extra};}
+function productFrame(id:string,x:number,y:number,w:number,h:number,product?:Product):PageBlock{return block(id,'frame',x,y,w,h,{frameKind:'product',productId:product?.id,borderWidth:1,objectFit:'contain',imageScale:1,imagePositionX:50,imagePositionY:50,locked:true,productInfo:{showName:true,showSku:true,showPrice:false,showMaterial:false,showCategory:false,showDescription:false,position:'below',align:'left',fontFamily:'Arial, sans-serif',fontSize:9,color:'#0f203a'}});}
+function imageAsProduct(id:string,x:number,y:number,w:number,h:number,product?:Product):PageBlock{return productFrame(id,x,y,w,h,product);}
+function imageFrame(id:string,x:number,y:number,w:number,h:number,product?:Product):PageBlock{return block(id,'frame',x,y,w,h,{frameKind:'image',url:product?.images?.[0],borderWidth:1,objectFit:'cover'});}
+function textBlock(id:string,text:string,x:number,y:number,w:number,h:number,size=18):PageBlock{return block(id,'text',x,y,w,h,{alt:text,fontFamily:'Georgia, serif',fontSize:size,fontStyle:'italic',textAlign:'left'});}
+function gridProducts(ids:string[],products:Product[],cols:number,rows:number,prefix:string){const gap=2.2,x0=5,y0=9,totalW=90,totalH=84,w=(totalW-gap*(cols-1))/cols,h=Math.max(7,(totalH-gap*(rows-1))/rows);return ids.map((pid,i)=>productFrame(`${prefix}-${i}`,x0+(i%cols)*(w+gap),y0+Math.floor(i/cols)*(h+gap),w,h,products.find(p=>p.id===pid)));}
+function previewBlocks(layout:LayoutId,products:Product[],productIds:string[]=[]):PageBlock[]{const p=(i:number)=>products.find(x=>x.id===productIds[i])||products[i%Math.max(products.length,1)];const a:PageBlock[]=[];switch(layout){case'COVER':a.push(imageAsProduct('cover-product',8,6,84,76,p(0)),textBlock('cover-title','NEW COLLECTION',15,82,70,9,28));break;case'BACK_COVER':a.push(textBlock('back-title','THANK YOU',20,43,60,12,28));break;case'LAYOUT_A_FULL_BLEED':a.push(imageAsProduct('full-product',3,3,94,78,p(0)),textBlock('full-title','THE COLLECTION',8,83,62,8,22),textBlock('full-copy','Editorial story',8,91,40,5,9));break;case'LAYOUT_B_HERO_PRODUCT':a.push(productFrame('hero-product',4,4,55,90,p(0)),textBlock('hero-title','FEATURED PIECE',64,47,30,9,20),textBlock('hero-copy','Product story and details',64,59,28,8,9));break;case'LAYOUT_C_PRODUCT_GRID':{const n=productIds.length||8,cols=n<=12?4:5,rows=Math.max(1,Math.ceil(n/cols));a.push(textBlock('grid-title','SELECTED PIECES',6,2,55,6,18),...gridProducts(productIds.length?productIds:Array.from({length:n},(_,i)=>products[i]?.id||''),products,cols,rows,'grid'));break;}case'LAYOUT_D_ASYMMETRIC':a.push(imageAsProduct('asym-main',4,4,57,70,p(0)),textBlock('asym-title','ARCHITECTURE OF ADORNMENT',66,14,29,10,20),productFrame('asym-p1',67,54,12,32,p(1)),productFrame('asym-p2',82,54,12,32,p(2)));break;case'LAYOUT_E_HERO_DETAILS':a.push(productFrame('hero-detail',4,4,64,88,p(0)),textBlock('detail-title','SIGNATURE PIECE',72,58,22,9,19),textBlock('detail-info','SKU / MATERIAL',72,71,20,8,8));break;case'LAYOUT_F_TWO_UP':a.push(imageAsProduct('two-left',3,3,46,94,p(0)),imageAsProduct('two-right',51,3,46,94,p(1)));break;case'LAYOUT_G_THREE_UP':for(let i=0;i<3;i++)a.push(imageAsProduct(`three-${i}`,3+i*32,3,30,94,p(i)));break;case'LAYOUT_H_TYPOGRAPHIC':a.push(textBlock('type-kicker','VENTA JEWELRY',10,28,80,5,8),textBlock('type-title','THE NEW OBJECTS',10,38,80,17,38),textBlock('type-copy','Typography-led editorial',10,60,62,8,10));break;case'LAYOUT_I_IMAGE_TEXT':a.push(imageAsProduct('image-text-product',3,3,48,94,p(0)),textBlock('image-text-title','EDITORIAL STORY',57,42,34,10,24),textBlock('image-text-copy','Campaign story',57,58,32,8,9));break;case'LAYOUT_J_PRODUCT_FEATURE':for(let i=0;i<3;i++)a.push(productFrame(`feature-${i}`,6+i*31,16,27,68,p(i)));break;case'LAYOUT_K_LOOK_PAGE':a.push(imageAsProduct('look-product',3,3,94,94,p(0)),textBlock('look-title','LOOK 01',8,10,40,9,22));break;case'LAYOUT_L_COLLECTION_INDEX':a.push(textBlock('index-title','COLLECTION INDEX',8,7,72,8,24),...productIds.slice(0,8).map((id,i)=>productFrame(`index-${i}`,8,20+i*10,84,8,p(i))));break;case'LAYOUT_M_PRODUCT_GRID_12':{const ids=productIds.slice(0,productIds.length||12),cols=ids.length<=12?4:5,rows=Math.max(1,Math.ceil(ids.length/cols));a.push(textBlock('grid12-title','12 PRODUCTS',5,2,50,5,15),...gridProducts(ids,products,cols,rows,'grid12'));break;}case'LAYOUT_N_PRODUCT_GRID_16':{const ids=productIds.slice(0,productIds.length||16),cols=ids.length<=16?4:5,rows=Math.max(1,Math.ceil(ids.length/cols));a.push(textBlock('grid16-title','16 PRODUCTS',5,2,50,5,15),...gridProducts(ids,products,cols,rows,'grid16'));break;}case'LAYOUT_O_EDITORIAL_COLLAGE':a.push(imageAsProduct('collage-main',5,5,56,65,p(0)),imageAsProduct('collage-small',65,10,28,25,p(1)),textBlock('collage-title','OBJECTS OF DESIRE',64,43,31,10,20),productFrame('collage-p1',65,76,13,18,p(2)),productFrame('collage-p2',80,76,13,18,p(3)));break;case'LAYOUT_P_IMAGE_4_PRODUCTS':a.push(imageAsProduct('p-main',4,4,40,92,p(0)));for(let i=0;i<4;i++)a.push(productFrame(`p-${i}`,48+(i%2)*24,8+Math.floor(i/2)*44,20,36,p(i+1)));break;case'LAYOUT_Q_SPLIT_EDITORIAL':a.push(imageAsProduct('split-product',3,3,57,94,p(0)),textBlock('split-title','EDITORIAL',66,37,28,10,25),textBlock('split-copy','Build a story',66,52,26,8,9));break;case'LAYOUT_R_PRODUCT_WALL':{const ids=productIds.slice(0,productIds.length||9),cols=ids.length<=9?3:5,rows=Math.max(1,Math.ceil(ids.length/cols));a.push(...gridProducts(ids,products,cols,rows,'wall'));break;}case'LAYOUT_S_MAGAZINE':a.push(imageAsProduct('mag-main',5,7,60,68,p(0)),imageAsProduct('mag-small',69,8,25,27,p(1)),textBlock('mag-title','VOLUME 01',68,45,26,8,20),textBlock('mag-copy','Objects of desire',68,58,25,8,9));break;case'LAYOUT_T_PRODUCT_INDEX':{const ids=productIds.slice(0,productIds.length||12),cols=2,rows=Math.max(1,Math.ceil(ids.length/cols));a.push(textBlock('product-index-title','PRODUCT INDEX',7,6,70,8,24),...gridProducts(ids,products,cols,rows,'product-index'));break;}default:break}return a;}
+function layoutMatchesBlocks(layout:LayoutId,blocks:PageBlock[]){if(!blocks.length)return false;const ids=blocks.map(b=>b.id.toLowerCase());const tokens:Record<string,string>={COVER:'cover',BACK_COVER:'back',LAYOUT_A_FULL_BLEED:'full-',LAYOUT_B_HERO_PRODUCT:'hero-product',LAYOUT_C_PRODUCT_GRID:'grid',LAYOUT_D_ASYMMETRIC:'asym-',LAYOUT_E_HERO_DETAILS:'hero-detail',LAYOUT_F_TWO_UP:'two-',LAYOUT_G_THREE_UP:'three-',LAYOUT_H_TYPOGRAPHIC:'type-',LAYOUT_I_IMAGE_TEXT:'image-text-',LAYOUT_J_PRODUCT_FEATURE:'feature-',LAYOUT_K_LOOK_PAGE:'look-',LAYOUT_L_COLLECTION_INDEX:'index-',LAYOUT_M_PRODUCT_GRID_12:'grid12-',LAYOUT_N_PRODUCT_GRID_16:'grid16-',LAYOUT_O_EDITORIAL_COLLAGE:'collage-',LAYOUT_P_IMAGE_4_PRODUCTS:'p-',LAYOUT_Q_SPLIT_EDITORIAL:'split-',LAYOUT_R_PRODUCT_WALL:'wall-',LAYOUT_S_MAGAZINE:'mag-',LAYOUT_T_PRODUCT_INDEX:'product-index-'};const t=tokens[layout];return !!t&&ids.some(x=>x===t||x.startsWith(t));}
+export function PageRenderer(props:{page:Page;products:Product[];thumbnail?:boolean;catalogSettings?:CatalogSettings;editor?:boolean;selectedBlockId?:string;onSelectBlock?:(id:string)=>void;onBlockPointerDown?:(id:string,e:React.PointerEvent)=>void;onBlockResizeStart?:(id:string,e:React.PointerEvent)=>void;onBlockPatch?:(id:string,p:Partial<PageBlock>)=>void}){const blocks=props.page.content?.blocks||[];const valid=layoutMatchesBlocks(props.page.layoutId,blocks);const materialized=(!valid||!blocks.length)?{...props.page,content:{...props.page.content,blocks:previewBlocks(props.page.layoutId,props.products,props.page.content?.productIds||[])}}:props.page;const renderPage=materialized;const key=[renderPage.id,renderPage.layoutId,(renderPage.content.blocks||[]).map(b=>`${b.id}:${b.productId||''}:${b.frameKind||''}:${b.url||''}`).join('|')].join('::');if(props.editor)return <PageRendererEditor key={`editor-${key}`} page={renderPage} products={props.products} catalogSettings={props.catalogSettings} selectedBlockId={props.selectedBlockId} onSelectBlock={props.onSelectBlock||(()=>{})} onBlockPointerDown={props.onBlockPointerDown||(()=>{})} onBlockResizeStart={props.onBlockResizeStart||(()=>{})} onBlockPatch={props.onBlockPatch||(()=>{})}/>;return <PageRenderer3 key={`view-${key}`} {...props} page={renderPage}/>;}
