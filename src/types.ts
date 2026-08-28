@@ -13,12 +13,14 @@ export interface PageBlock{
   imageScale?:number; imagePositionX?:number; imagePositionY?:number;
   fontFamily?:string;fontSize?:number;fontWeight?:number;fontStyle?:'normal'|'italic';textAlign?:'left'|'center'|'right';
   textColor?:string; frameKind?:'image'|'product'; borderWidth?:number;borderRadius?:number;productInfo?:ProductInfoSettings;
+  locked?:boolean;fitMode?:'cover'|'contain';
 }
 export interface CatalogSettings{
   pageWidth:number;pageHeight:number;unit:'mm'|'px'|'in';showHeader:boolean;headerText:string;showPageNumbers:boolean;
   pageNumberPosition:'top-left'|'top-center'|'top-right'|'bottom-left'|'bottom-center'|'bottom-right';
   showFooter:boolean;footerText:string;footerPageNumbers:boolean;footerPosition:'left'|'center'|'right';
   marginTop:number;marginRight:number;marginBottom:number;marginLeft:number;showBorder:boolean;backgroundColor:string;
+  gridSize?:number;gridVisible?:boolean;gridSnap?:boolean;
 }
 export interface Catalog{id:string;name:string;description:string;coverImage:string;logoUrl?:string;createdAt:string;updatedAt:string;
   status:'draft'|'published';theme:{primaryColor:string;secondaryColor:string;serifFont:string;sansFont:string};settings?:CatalogSettings}
@@ -29,6 +31,7 @@ export interface Page{
   id:string;catalogId:string;order:number;layoutId:LayoutId;title:string;
   content:{images?:string[];productIds?:string[];blocks?:PageBlock[];headline?:string;subheadline?:string;body?:string;quote?:string;hotspots?:Hotspot[]};
   style?:{backgroundColor?:string;backgroundImage?:string;textColor?:string;customMargins?:string;overlayOpacity?:number;fontFamily?:string;fontSize?:number;lineHeight?:number;
-    showHeader?:boolean;headerText?:string;showFooter?:boolean;footerText?:string;showPageNumber?:boolean;pageNumberPosition?:CatalogSettings['pageNumberPosition']};
+    showHeader?:boolean;headerText?:string;showFooter?:boolean;footerText?:string;showPageNumber?:boolean;pageNumberPosition?:CatalogSettings['pageNumberPosition'];
+    gridSize?:number;gridVisible?:boolean;gridSnap?:boolean;gridLocked?:boolean;}
 }
 export interface Hotspot{productId:string;x:number;y:number}
