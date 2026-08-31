@@ -8,52 +8,65 @@ const write=(f,s)=>fs.writeFileSync(path.join(root,f),s);
  const f='src/components/studio/CatalogStudioFinal.tsx'; let s=read(f);
  s=s.replace('function buildBlocks(layout:LayoutId,ids:string[],preset?:GridPreset):PageBlock[]','export function buildBlocks(layout:LayoutId,ids:string[],preset?:GridPreset):PageBlock[]');
 
- const helper=` const applyLayoutToPage=(sourcePages:Page[],pageIndex:number,layout:LayoutId,preset:GridPreset):Page[]=>{
-  const result=sourcePages.map(p=>({...p,content:{...p.content,blocks:(p.content.blocks||[]).map(b=>({...b}))}}));
+ const helper=` const buildPagesFromProducts=(sourcePages:Page[],pageIndex:number,ids:string[],layout:LayoutId,preset:GridPreset):Page[]=>{
+  const result=sourcePages.map(p=>({...p,content:{...p.content,blocks:(p.content.blocks||[]).map(b=>({...b,productInfo:b.productInfo?{...b.productInfo}:undefined}))}}));
   if(pageIndex<0||pageIndex>=result.length)return result;
-  const selected=result[pageIndex];
-  const selectedIds=getProductIds(selected);
+  const target=result[pageIndex];
   const cap=capacity(layout,preset);
-  const head=selectedIds.slice(0,cap);
-  let overflow=selectedIds.slice(cap);
-  result[pageIndex]={...replaceProductIds(selected,head,layout,preset),style:{...(selected.style||{}),gridPreset:preset}};
-  let cursor=pageIndex+1;
-  while(overflow.length){
-   if(cursor<result.length){
-    const target=result[cursor];
-    const targetIds=getProductIds(target);
-    const targetPreset=((target.style as any)?.gridPreset||12) as GridPreset;
-    const targetCap=capacity(target.layoutId,targetPreset);
-    const combined=[...targetIds,...overflow];
-    const keep=combined.slice(0,targetCap);
-    overflow=combined.slice(targetCap);
-    result[cursor]={...replaceProductIds(target,keep,target.layoutId,targetPreset),style:{...(target.style||{}),gridPreset:targetPreset}};
-    cursor++;
-   }else{
-    const template=result[result.length-1]||selected;
-    const newLayout=template.layoutId;
-    const newPreset=((template.style as any)?.gridPreset||12) as GridPreset;
-    const newIds=overflow.slice(0,capacity(newLayout,newPreset));
-    overflow=overflow.slice(newIds.length);
-    const np={id:uid(),catalogId:template.catalogId,order:result.length,layoutId:newLayout,title:\`Page \${result.length+1}\`,style:{...(template.style||{}),gridPreset:newPreset},content:{blocks:[],productIds:[]}} as Page;
-    result.push(replaceProductIds(np,newIds,newLayout,newPreset));
-    cursor++;
-   }
+  const head=ids.slice(0,cap);
+  const overflow=ids.slice(cap);
+  result[pageIndex]={...replaceProductIds(target,head,layout,preset),style:{...(target.style||{}),gridPreset:preset}};
+  if(!overflow.length)return result.map((p,i)=>({...p,order:i}));
+  const inserted:Page[]=[];
+  for(let offset=0;offset<overflow.length;offset+=cap){
+   const chunk=overflow.slice(offset,offset+cap);
+   const source=target;
+   const np={id:uid(),catalogId:source.catalogId,order:pageIndex+1+inserted.length,layoutId:layout,title:\`Page \${pageIndex+2+inserted.length}\`,style:{...(source.style||{}),gridPreset:preset},content:{...source.content,blocks:[],productIds:[]}} as Page;
+   inserted.push(replaceProductIds(np,chunk,layout,preset));
   }
+  result.splice(pageIndex+1,0,...inserted);
   return result.map((p,i)=>({...p,order:i}));
  };
 `;
  const helperMarker=' const selectLayout=(layout:LayoutId)=>{';
- if(!s.includes('const applyLayoutToPage='))s=s.replace(helperMarker,helper+helperMarker);
+ if(!s.includes('const buildPagesFromProducts='))s=s.replace(helperMarker,helper+helperMarker);
 
- // Replace the old global reflow handlers by slicing only the handler region.
- const selStart=s.indexOf(' const selectLayout=');
- const addStart=s.indexOf(' const addMany=',selStart);
- if(selStart>=0&&addStart>selStart){
-  const handlers=` const selectLayout=(layout:LayoutId)=>{const index=pages.findIndex(p=>p.id===page.id);const next=applyLayoutToPage(pages,index,layout,gridPreset);updatePages(next);setSelectedPageId(page.id);setSelectedBlockId(undefined);setNotice(\`${'${layoutNames[layout]}'} seçildi · yalnızca seçili sayfa değiştirildi\`);setTimeout(()=>setNotice(''),1800)};
- const applyClassic=()=>{const index=pages.findIndex(p=>p.id===page.id);const next=applyLayoutToPage(pages,index,'LAYOUT_C_PRODUCT_GRID',gridPreset);updatePages(next);setSelectedPageId(page.id);setSelectedBlockId(undefined);setNotice(\`${'${gridPreset}'}’li klasik grid yalnızca seçili sayfaya uygulandı\`);setTimeout(()=>setNotice(''),1800)};
+ const handlersStart=s.indexOf(' const makeChunkPage=');
+ const handlersEnd=s.indexOf(' const removeSelected=',handlersStart);
+ if(handlersStart>=0&&handlersEnd>handlersStart){
+  const handlers=` const selectLayout=(layout:LayoutId)=>{
+  const index=Math.max(0,pages.findIndex(p=>p.id===page.id));
+  const next=buildPagesFromProducts(pages,index,currentIds,layout,gridPreset);
+  updatePages(next);
+  setSelectedPageId(page.id);
+  setSelectedBlockId(undefined);
+  setNotice(\`${'${layoutNames[layout]}'} yalnızca seçili sayfaya uygulandı\`);
+  setTimeout(()=>setNotice(''),1800);
+ };
+ const applyClassic=()=>{
+  const index=Math.max(0,pages.findIndex(p=>p.id===page.id));
+  const next=buildPagesFromProducts(pages,index,currentIds,'LAYOUT_C_PRODUCT_GRID',gridPreset);
+  updatePages(next);
+  setSelectedPageId(page.id);
+  setSelectedBlockId(undefined);
+  setNotice(\`${'${gridPreset}'}’li klasik grid yalnızca seçili sayfaya uygulandı\`);
+  setTimeout(()=>setNotice(''),1800);
+ };
+ const addMany=(items:Product[])=>{
+  if(!items.length)return;
+  const index=Math.max(0,pages.findIndex(p=>p.id===page.id));
+  const layout=page.layoutId;
+  const all=[...currentIds,...items.map(p=>p.id).filter(id=>!currentIds.includes(id))];
+  const next=buildPagesFromProducts(pages,index,all,layout,gridPreset);
+  updatePages(next);
+  setSelectedPageId(page.id);
+  setSelectedBlockId(undefined);
+  setNotice(\`${'${items.length}'} ürün eklendi · mevcut sayfa düzeni korunuyor\`);
+  setTimeout(()=>setNotice(''),1800);
+ };
+ const addProduct=(p:Product)=>{if(usedElsewhere.has(p.id)){setNotice('Bu ürün başka sayfada kullanılıyor.');return}addMany([p])};
 `;
-  s=s.slice(0,selStart)+handlers+s.slice(addStart);
+  s=s.slice(0,handlersStart)+handlers+s.slice(handlersEnd);
  }
  write(f,s);
 }
@@ -76,7 +89,7 @@ const write=(f,s)=>fs.writeFileSync(path.join(root,f),s);
      for(let i=0;i<result.length;i++){
        const p=result[i];
        const preset=((p.style as any)?.gridPreset||12) as number;
-       const cap=p.layoutId==='LAYOUT_C_PRODUCT_GRID'?preset:p.layoutId==='LAYOUT_M_PRODUCT_GRID_12'?12:p.layoutId==='LAYOUT_N_PRODUCT_GRID_16'?16:p.layoutId==='LAYOUT_D_ASYMMETRIC'?3:p.layoutId==='LAYOUT_O_EDITORIAL_COLLAGE'?4:p.layoutId==='LAYOUT_P_IMAGE_4_PRODUCTS'?5:p.layoutId==='LAYOUT_S_MAGAZINE'?2:1;
+       const cap=p.layoutId==='LAYOUT_C_PRODUCT_GRID'?preset:p.layoutId==='LAYOUT_M_PRODUCT_GRID_12'?12:p.layoutId==='LAYOUT_N_PRODUCT_GRID_16'?16:p.layoutId==='LAYOUT_D_ASYMMETRIC'?3:p.layoutId==='LAYOUT_O_EDITORIAL_COLLAGE'?4:p.layoutId==='LAYOUT_P_IMAGE_4_PRODUCTS'?5:p.layoutId==='LAYOUT_S_MAGAZINE'?2:p.layoutId==='LAYOUT_B_HERO_PRODUCT'||p.layoutId==='LAYOUT_Q_SPLIT_EDITORIAL'||p.layoutId==='COVER'?1:1;
        const ids=productIdsOf(p);
        if(ids.length<cap){const nextIds=[...ids,id];result[i]={...p,content:{...p.content,productIds:nextIds,blocks:buildBlocks(p.layoutId,nextIds,preset as any)}};placed=true;break;}
      }
@@ -96,4 +109,4 @@ const write=(f,s)=>fs.writeFileSync(path.join(root,f),s);
  if(!s.includes('headerWidth?:number'))s=s.replace('gridLocked?:boolean;}','gridLocked?:boolean;headerWidth?:number;headerHeight?:number;footerWidth?:number;footerHeight?:number;gridGapHorizontal?:number;gridGapVertical?:number;gridInsetLeft?:number;gridInsetRight?:number;gridInsetTop?:number;gridInsetBottom?:number;}');
  write(f,s);
 }
-console.log('VENTA Catalog Studio: page-local layout behavior and independent page model applied');
+console.log('VENTA Catalog Studio: stable page-local layouts and non-destructive product pagination applied');
