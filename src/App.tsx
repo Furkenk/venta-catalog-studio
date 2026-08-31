@@ -3,7 +3,7 @@ import { ArrowRight, BookOpen, Loader2, LogIn, LogOut, User, Settings, ExternalL
 import { Catalog, Page, Product, CatalogSettings } from './types';
 import { mockCatalog, mockPages, mockProducts } from './mockData';
 import { CatalogReader } from './components/reader/CatalogReader';
-import { CatalogStudioEnhanced as CatalogStudio } from './components/studio/CatalogStudioEnhanced';
+import { CatalogStudioGuard as CatalogStudio } from './components/studio/CatalogStudioGuard';
 import { fetchShopifyProducts, getShopifyStatus, loadCatalogState, loadPublicCatalog, saveCatalogState } from './lib/shopify';
 const LOGO_SRC='/venta-logo.svg';const BRAND='#0f203a';type User={username:string;role:'admin'|'user'};
 const DEFAULT_SETTINGS:CatalogSettings={pageWidth:210,pageHeight:297,unit:'mm',showHeader:false,headerText:'VENTA JEWELRY',showPageNumbers:true,pageNumberPosition:'bottom-center',showFooter:false,footerText:'VENTA JEWELRY',footerPageNumbers:false,footerPosition:'center',marginTop:12,marginRight:12,marginBottom:14,marginLeft:12,showBorder:false,backgroundColor:'#ffffff'};
