@@ -4,7 +4,7 @@ import { CatalogStudioFinal } from './CatalogStudioFinal';
 import { ProductSelectionPanelV2 } from './ProductSelectionPanelV2';
 
 type Props=React.ComponentProps<typeof CatalogStudioFinal>&{collections?:{id:string;name:string}[];categories?:{id:string;name:string}[]};
-const clonePages=(pages:Page[])=>pages.map(p=>({...p,content:{...p.content,blocks:(p.content.blocks||[]).map(b=>({...b,productInfo:b.productInfo?{...b.productInfo}:undefined}))}});
+const clonePages=(pages:Page[])=>pages.map(p=>({...p,content:{...p.content,blocks:[...(p.content.blocks||[])]}}));
 const idsOf=(p:Page)=>{const ids=(p.content?.blocks||[]).filter(b=>b.frameKind==='product'&&b.productId).map(b=>b.productId!);return ids.length?ids:(p.content?.productIds||[])};
 const sameIds=(a:Page,b:Page)=>{const x=idsOf(a),y=idsOf(b);return x.length===y.length&&x.every((v,i)=>v===y[i]);};
 export function CatalogStudioGuard(props:Props){
