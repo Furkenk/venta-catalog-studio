@@ -68,6 +68,14 @@ const write=(f,s)=>fs.writeFileSync(path.join(root,f),s);
 `;
   s=s.slice(0,handlersStart)+handlers+s.slice(handlersEnd);
  }
+ // Render only a bounded slice of the product pool. Rendering hundreds of remote images at once can blank/freeze the browser.
+ s=s.replace("const [search,setSearch]=React.useState(''),[category,setCategory]=React.useState(''),[collection,setCollection]=React.useState('');", "const [search,setSearch]=React.useState(''),[category,setCategory]=React.useState(''),[collection,setCollection]=React.useState(''); const [productListLimit,setProductListLimit]=React.useState(40);");
+ s=s.replace("const available=products.filter(p=>!usedAll.has(p.id)&&", "const available=products.filter(p=>!usedAll.has(p.id)&&");
+ s=s.replace(" const pushHistory=()=>", " React.useEffect(()=>{setProductListLimit(40)},[search,category,collection]); const visibleProducts=available.slice(0,productListLimit);\n const pushHistory=()=>");
+ s=s.replace("{available.map(p=><button", "{visibleProducts.map(p=><button");
+ const productListMarker="</div>}\n {tab==='elements'&&";
+ const productListReplacement="</div>{available.length>productListLimit&&<button onClick={()=>setProductListLimit(n=>n+40)} className=\"w-full mt-2 h-8 border border-[#0f203a]/20 text-[9px]\">Daha fazla ürün göster ({Math.min(40,available.length-productListLimit)})</button>}\n {tab==='elements'&&";
+ s=s.replace(productListMarker,productListReplacement);
  write(f,s);
 }
 
@@ -77,7 +85,7 @@ const write=(f,s)=>fs.writeFileSync(path.join(root,f),s);
  const end=s.indexOf('\nexport function CatalogStudioEnhanced',start);
  if(start>=0&&end>start){
   const fn=`function rebalancePages(previous:Page[],next:Page[]):Page[]{
-   const changedIndex=next.findIndex(np=>{const pp=previous.find(p=>p.id===np.id);return !!pp&&(pp.layoutId!==np.layoutId||((np.style as any)?.gridPreset!==(pp.style as any)?.gridPreset));});
+   const changedIndex=next.findIndex(np=>{const pp=previous.find(p=>p.id===np.id);return !!pp&&(np.layoutId!==pp.layoutId||((np.style as any)?.gridPreset!==(pp.style as any)?.gridPreset));});
    if(changedIndex>=0)return next.map(cleanBlocks).map((p,i)=>({...p,order:i}));
    const prevAll=unique(previous.flatMap(productIdsOf));
    const nextAll=unique(next.flatMap(productIdsOf));
@@ -109,4 +117,4 @@ const write=(f,s)=>fs.writeFileSync(path.join(root,f),s);
  if(!s.includes('headerWidth?:number'))s=s.replace('gridLocked?:boolean;}','gridLocked?:boolean;headerWidth?:number;headerHeight?:number;footerWidth?:number;footerHeight?:number;gridGapHorizontal?:number;gridGapVertical?:number;gridInsetLeft?:number;gridInsetRight?:number;gridInsetTop?:number;gridInsetBottom?:number;}');
  write(f,s);
 }
-console.log('VENTA Catalog Studio: stable page-local layouts and non-destructive product pagination applied');
+console.log('VENTA Catalog Studio: product pool rendering guarded; stable page-local layouts and non-destructive product pagination applied');
