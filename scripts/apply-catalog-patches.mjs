@@ -68,14 +68,20 @@ const write=(f,s)=>fs.writeFileSync(path.join(root,f),s);
 `;
   s=s.slice(0,handlersStart)+handlers+s.slice(handlersEnd);
  }
- // Render only a bounded slice of the product pool. Rendering hundreds of remote images at once can blank/freeze the browser.
+
  s=s.replace("const [search,setSearch]=React.useState(''),[category,setCategory]=React.useState(''),[collection,setCollection]=React.useState('');", "const [search,setSearch]=React.useState(''),[category,setCategory]=React.useState(''),[collection,setCollection]=React.useState(''); const [productListLimit,setProductListLimit]=React.useState(40);");
- s=s.replace("const available=products.filter(p=>!usedAll.has(p.id)&&", "const available=products.filter(p=>!usedAll.has(p.id)&&");
+ s=s.replace("const available=products.filter(p=>!usedAll.has(p.id)&&", "const available=(Array.isArray(products)?products:[]).filter(p=>!usedAll.has(p.id)&&");
  s=s.replace(" const pushHistory=()=>", " React.useEffect(()=>{setProductListLimit(40)},[search,category,collection]); const visibleProducts=available.slice(0,productListLimit);\n const pushHistory=()=>");
  s=s.replace("{available.map(p=><button", "{visibleProducts.map(p=><button");
  const productListMarker="</div>}\n {tab==='elements'&&";
  const productListReplacement="</div>{available.length>productListLimit&&<button onClick={()=>setProductListLimit(n=>n+40)} className=\"w-full mt-2 h-8 border border-[#0f203a]/20 text-[9px]\">Daha fazla ürün göster ({Math.min(40,available.length-productListLimit)})</button>}\n {tab==='elements'&&";
  s=s.replace(productListMarker,productListReplacement);
+
+ // Products tab is isolated from the rest of the editor. Never mount hundreds of image-heavy cards at once.
+ const safeProductsTab=`{tab==='products'&&<div className="space-y-3"><div className="flex gap-2"><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Ürün ara..." className="field flex-1"/><button onClick={()=>addMany(available)} disabled={!available.length} className="h-9 px-3 border text-[9px] disabled:opacity-40">Tümünü ekle</button></div><div className="grid grid-cols-1 gap-2 max-h-[calc(100vh-230px)] overflow-auto pr-1">{visibleProducts.map(p=><button key={p.id} onClick={()=>addProduct(p)} className="w-full flex items-center gap-3 border border-[#0f203a]/10 bg-white p-2 text-left hover:border-[#0f203a]/30"><div className="w-12 h-12 shrink-0 bg-[#f7f8fa] overflow-hidden"><img src={Array.isArray(p.images)?p.images[0]:undefined} loading="lazy" decoding="async" draggable={false} className="w-full h-full object-contain" onError={e=>{e.currentTarget.style.display='none'}}/></div><div className="min-w-0 flex-1"><div className="text-[10px] font-semibold truncate">{p.name||'Ürün'}</div><div className="text-[9px] opacity-50 truncate">SKU {p.sku||'—'}</div></div><span className="text-[9px] uppercase tracking-[.12em] opacity-50">Ekle</span></button>)}</div>{available.length>productListLimit&&<button onClick={()=>setProductListLimit(n=>n+40)} className="w-full h-9 border text-[9px]">Daha fazla ürün göster ({Math.min(40,available.length-productListLimit)})</button>}</div>}`;
+ const productTabPattern=/\{tab==='products'&&[\s\S]*?\{tab==='elements'&&/;
+ if(productTabPattern.test(s))s=s.replace(productTabPattern,safeProductsTab+'\n {tab===\'elements\'&&');
+
  write(f,s);
 }
 
@@ -117,4 +123,4 @@ const write=(f,s)=>fs.writeFileSync(path.join(root,f),s);
  if(!s.includes('headerWidth?:number'))s=s.replace('gridLocked?:boolean;}','gridLocked?:boolean;headerWidth?:number;headerHeight?:number;footerWidth?:number;footerHeight?:number;gridGapHorizontal?:number;gridGapVertical?:number;gridInsetLeft?:number;gridInsetRight?:number;gridInsetTop?:number;gridInsetBottom?:number;}');
  write(f,s);
 }
-console.log('VENTA Catalog Studio: product pool rendering guarded; stable page-local layouts and non-destructive product pagination applied');
+console.log('VENTA Catalog Studio: product pool rendering guarded; Products tab isolated with lazy bounded cards; stable page-local layouts and non-destructive product pagination applied');
