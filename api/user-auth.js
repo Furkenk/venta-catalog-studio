@@ -1,14 +1,143 @@
 const crypto = require('crypto');
 const { parseCookies, sign, base64url } = require('./auth-utils.cjs');
-const USERS = {
-  admin:{username:'Admin',role:'admin',salt:'0ea1757daa41eb0f08360c18b1ba21eb',hash:'c149eb8a62ae5815e2286edfc70c1ff8cf46ca35d64b08b26cd03c2c671f2ad4'},
-  ersoy:{username:'Ersoy',role:'user',salt:'145ea8d3327a970d26cc61b2846f3120',hash:'12682afc9e53c469553728459221b34c09a2b948e3d3f0ac2ad6a17ae132f3fe'},
-  onur:{username:'Onur',role:'user',salt:'21658d3418a615d257be050e51d5458a',hash:'3f014c95cb442997cdd00e837f646fcdbfc6c5e3bb3f47f68d615f49d70f8771'},
-  ahmet:{username:'Ahmet',role:'user',salt:'6e086c50513911bb8bff6918b9291141',hash:'010b5c046968ea9b2068958d6ff48c3bdb8a57c28fb32ee48cc0ade15f6fc8fe'},
-  furkan:{username:'Furkan',role:'admin',salt:'233ed68189615fdc28ce3dd97c539737',hash:'dd7702f9f6f140945134fcd67fb99de2193cff9080c92fc33430024a9b448e9a'}
+
+const CATALOG_LOGIN_DOMAIN = 'catalog.ventajewelry.local';
+const SESSION_MAX_AGE = 12 * 60 * 60;
+
+function getSupabaseConfig() {
+  const url = String(process.env.SUPABASE_URL || '').replace(/\/$/, '');
+  const key = process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_PUBLISHABLE_KEY;
+
+  if (!url || !key) {
+    throw new Error('SUPABASE_URL and SUPABASE_ANON_KEY must be configured.');
+  }
+
+  return { url, key };
+}
+
+function normalizeUsername(username) {
+  const normalized = String(username || '').trim().toLowerCase();
+
+  if (!/^[a-z0-9_]{3,32}$/.test(normalized)) {
+    return null;
+  }
+
+  return normalized;
+}
+
+function makeToken(user) {
+  const payload = base64url(JSON.stringify({ u: user.username, r: user.role, iat: Date.now() }));
+  return `${payload}.${sign(payload)}`;
+}
+
+function getUser(req) {
+  const token = parseCookies(req.headers.cookie || '').venta_user_session;
+  if (!token) return null;
+
+  const [payload, signature] = token.split('.');
+  if (!payload || !signature || signature !== sign(payload)) return null;
+
+  try {
+    const session = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
+    if (Date.now() - Number(session.iat) > SESSION_MAX_AGE * 1000) return null;
+
+    if (!['admin', 'user'].includes(session.r) || !normalizeUsername(session.u)) return null;
+
+    return { username: session.u, role: session.r };
+  } catch {
+    return null;
+  }
+}
+
+function setUserSession(res, user) {
+  res.setHeader(
+    'Set-Cookie',
+    `venta_user_session=${makeToken(user)}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${SESSION_MAX_AGE}`
+  );
+}
+
+async function readJson(response) {
+  const body = await response.text();
+
+  try {
+    return body ? JSON.parse(body) : {};
+  } catch {
+    return {};
+  }
+}
+
+async function authenticateWithSupabase(username, password) {
+  const normalizedUsername = normalizeUsername(username);
+  if (!normalizedUsername || !password) return null;
+
+  const { url, key } = getSupabaseConfig();
+  const email = `${normalizedUsername}@${CATALOG_LOGIN_DOMAIN}`;
+
+  const authResponse = await fetch(`${url}/auth/v1/token?grant_type=password`, {
+    method: 'POST',
+    headers: {
+      apikey: key,
+      Authorization: `Bearer ${key}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ email, password: String(password) }),
+  });
+
+  const authData = await readJson(authResponse);
+  if (!authResponse.ok || !authData.user?.id || !authData.access_token) return null;
+
+  const memberResponse = await fetch(
+    `${url}/rest/v1/catalog_members?user_id=eq.${encodeURIComponent(authData.user.id)}&select=role,full_name`,
+    {
+      headers: {
+        apikey: key,
+        Authorization: `Bearer ${authData.access_token}`,
+      },
+    }
+  );
+
+  const members = await readJson(memberResponse);
+  const member = Array.isArray(members) ? members[0] : null;
+  if (!member || !['manager', 'admin'].includes(member.role)) return null;
+
+  return {
+    username: member.full_name || normalizedUsername,
+    role: member.role === 'manager' ? 'admin' : 'user',
+  };
+}
+
+module.exports = async (req, res) => {
+  if (req.method === 'GET') {
+    const user = getUser(req);
+    return res.status(200).json({ authenticated: !!user, user });
+  }
+
+  if (req.method === 'DELETE') {
+    res.setHeader(
+      'Set-Cookie',
+      'venta_user_session=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0'
+    );
+    return res.status(200).json({ ok: true });
+  }
+
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  try {
+    const { username = '', password = '' } = req.body || {};
+    const user = await authenticateWithSupabase(username, password);
+
+    if (!user) {
+      return res.status(401).json({ error: 'Kullanıcı adı veya şifre hatalı.' });
+    }
+
+    setUserSession(res, user);
+    return res.status(200).json({ authenticated: true, user });
+  } catch (error) {
+    console.error('Supabase user authentication failed:', error);
+    return res.status(500).json({ error: 'Giriş servisi yapılandırılamadı.' });
+  }
 };
-function safePassword(password,user){const hash=crypto.scryptSync(String(password),user.salt,32).toString('hex');const a=Buffer.from(hash),b=Buffer.from(user.hash);return a.length===b.length&&crypto.timingSafeEqual(a,b)}
-function makeToken(user){const payload=base64url(JSON.stringify({u:user.username,r:user.role,iat:Date.now()}));return `${payload}.${sign(payload)}`}
-function getUser(req){const token=parseCookies(req.headers.cookie||'').venta_user_session;if(!token)return null;const [payload,sig]=token.split('.');if(!payload||!sig||sig!==sign(payload))return null;try{const p=JSON.parse(Buffer.from(payload,'base64url').toString('utf8'));if(Date.now()-Number(p.iat)>12*60*60*1000)return null;const user=USERS[String(p.u||'').toLowerCase()];return user?{username:user.username,role:user.role}:null}catch{return null}}
-module.exports=async(req,res)=>{if(req.method==='GET')return res.status(200).json({authenticated:!!getUser(req),user:getUser(req)});if(req.method==='DELETE'){res.setHeader('Set-Cookie','venta_user_session=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0');return res.status(200).json({ok:true})}if(req.method!=='POST')return res.status(405).json({error:'Method not allowed'});const {username='',password=''}=req.body||{};const user=USERS[String(username).toLowerCase()];if(!user||!safePassword(password,user))return res.status(401).json({error:'Kullanıcı adı veya şifre hatalı.'});res.setHeader('Set-Cookie',`venta_user_session=${makeToken(user)}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=43200`);return res.status(200).json({authenticated:true,user:{username:user.username,role:user.role}})};
-module.exports.getUser=getUser;
+
+module.exports.getUser = getUser;
