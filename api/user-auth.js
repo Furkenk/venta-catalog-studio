@@ -1,32 +1,31 @@
 const crypto = require('crypto');
 const { parseCookies, sign, base64url } = require('./auth-utils.cjs');
 
-const CATALOG_LOGIN_DOMAIN = 'catalog.ventajewelry.local';
 const SESSION_MAX_AGE = 12 * 60 * 60;
 
 function getSupabaseConfig() {
   const url = String(process.env.SUPABASE_URL || '').replace(/\/$/, '');
-  const key = process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_PUBLISHABLE_KEY;
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-  if (!url || !key) {
-    throw new Error('SUPABASE_URL and SUPABASE_ANON_KEY must be configured.');
+  if (!url || !serviceRoleKey) {
+    throw new Error('SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be configured.');
   }
 
-  return { url, key };
+  return { url, serviceRoleKey };
 }
 
 function normalizeUsername(username) {
-  const normalized = String(username || '').trim().toLowerCase();
-
-  if (!/^[a-z0-9_]{3,32}$/.test(normalized)) {
-    return null;
-  }
-
-  return normalized;
+  const normalized = String(username || '').trim().toLocaleLowerCase('tr-TR');
+  return /^[a-z0-9çğıöşü]{3,32}$/u.test(normalized) ? normalized : null;
 }
 
 function makeToken(user) {
-  const payload = base64url(JSON.stringify({ u: user.username, r: user.role, iat: Date.now() }));
+  const payload = base64url(JSON.stringify({
+    u: user.username,
+    n: user.fullName,
+    r: user.role,
+    iat: Date.now(),
+  }));
   return `${payload}.${sign(payload)}`;
 }
 
@@ -40,10 +39,13 @@ function getUser(req) {
   try {
     const session = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
     if (Date.now() - Number(session.iat) > SESSION_MAX_AGE * 1000) return null;
+    if (!['manager', 'admin'].includes(session.r) || !normalizeUsername(session.u)) return null;
 
-    if (!['admin', 'user'].includes(session.r) || !normalizeUsername(session.u)) return null;
-
-    return { username: session.u, role: session.r };
+    return {
+      username: session.u,
+      fullName: session.n || session.u,
+      role: session.r,
+    };
   } catch {
     return null;
   }
@@ -56,53 +58,48 @@ function setUserSession(res, user) {
   );
 }
 
-async function readJson(response) {
-  const body = await response.text();
-
-  try {
-    return body ? JSON.parse(body) : {};
-  } catch {
-    return {};
+function safeEqualHex(left, right) {
+  if (!/^[a-f0-9]{64}$/i.test(left || '') || !/^[a-f0-9]{64}$/i.test(right || '')) {
+    return false;
   }
+
+  return crypto.timingSafeEqual(Buffer.from(left, 'hex'), Buffer.from(right, 'hex'));
 }
 
-async function authenticateWithSupabase(username, password) {
+async function authenticateMember(username, password) {
   const normalizedUsername = normalizeUsername(username);
   if (!normalizedUsername || !password) return null;
 
-  const { url, key } = getSupabaseConfig();
-  const email = `${normalizedUsername}@${CATALOG_LOGIN_DOMAIN}`;
-
-  const authResponse = await fetch(`${url}/auth/v1/token?grant_type=password`, {
-    method: 'POST',
-    headers: {
-      apikey: key,
-      Authorization: `Bearer ${key}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ email, password: String(password) }),
-  });
-
-  const authData = await readJson(authResponse);
-  if (!authResponse.ok || !authData.user?.id || !authData.access_token) return null;
-
-  const memberResponse = await fetch(
-    `${url}/rest/v1/catalog_members?user_id=eq.${encodeURIComponent(authData.user.id)}&select=role,full_name`,
+  const { url, serviceRoleKey } = getSupabaseConfig();
+  const response = await fetch(
+    `${url}/rest/v1/catalog_members?username=eq.${encodeURIComponent(normalizedUsername)}&active=eq.true&select=username,full_name,role,password_hash&limit=1`,
     {
       headers: {
-        apikey: key,
-        Authorization: `Bearer ${authData.access_token}`,
+        apikey: serviceRoleKey,
+        Authorization: `Bearer ${serviceRoleKey}`,
       },
     }
   );
 
-  const members = await readJson(memberResponse);
+  if (!response.ok) {
+    throw new Error(`Member lookup failed with ${response.status}.`);
+  }
+
+  const members = await response.json();
   const member = Array.isArray(members) ? members[0] : null;
   if (!member || !['manager', 'admin'].includes(member.role)) return null;
 
+  const passwordHash = crypto
+    .createHash('sha256')
+    .update(String(password), 'utf8')
+    .digest('hex');
+
+  if (!safeEqualHex(passwordHash, member.password_hash)) return null;
+
   return {
-    username: member.full_name || normalizedUsername,
-    role: member.role === 'manager' ? 'admin' : 'user',
+    username: member.username,
+    fullName: member.full_name,
+    role: member.role,
   };
 }
 
@@ -126,7 +123,7 @@ module.exports = async (req, res) => {
 
   try {
     const { username = '', password = '' } = req.body || {};
-    const user = await authenticateWithSupabase(username, password);
+    const user = await authenticateMember(username, password);
 
     if (!user) {
       return res.status(401).json({ error: 'Kullanıcı adı veya şifre hatalı.' });
@@ -135,7 +132,7 @@ module.exports = async (req, res) => {
     setUserSession(res, user);
     return res.status(200).json({ authenticated: true, user });
   } catch (error) {
-    console.error('Supabase user authentication failed:', error);
+    console.error('Member authentication failed:', error);
     return res.status(500).json({ error: 'Giriş servisi yapılandırılamadı.' });
   }
 };
