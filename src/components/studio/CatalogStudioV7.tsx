@@ -1,24 +1,189 @@
-import React from 'react';
-import {Filter,X,Check,RotateCcw} from 'lucide-react';
-import {Catalog,Page,Product,LayoutId,PageBlock} from '../../types';
-import {CatalogStudioV5} from './CatalogStudioV5';
+import React, { useMemo, useState } from 'react';
+import { Check, Filter, RotateCcw, X } from 'lucide-react';
+import CatalogStudioV5 from './CatalogStudioV5';
 
-type Props={catalog:Catalog;pages:Page[];products:Product[];collections?:{id:string;name:string}[];categories?:{id:string;name:string}[];onUpdatePage:(p:Page)=>void;onUpdateCatalog:(u:Partial<Catalog>)=>void;onAddPage:()=>void;onDeletePage:(id:string)=>void;onExit:()=>void;onReplacePages?:(pages:Page[])=>void;canPublish?:boolean;onPublish?:()=>Promise<void>|void;onPreview?:()=>void};
-const uid=()=>crypto.randomUUID();
-const rows=(p:Page)=>p.content.blocks||[];
-const productBlockIndexes=(p:Page)=>rows(p).map((b,i)=>({b,i})).filter(x=>x.b.frameKind==='product').map(x=>x.i);
-const assignProducts=(p:Page,ids:string[]):Page=>{const blocks=rows(p).map(b=>({...b,productInfo:b.productInfo?{...b.productInfo}:undefined}));const idx=productBlockIndexes(p);idx.forEach((bi,i)=>{blocks[bi].productId=ids[i]||undefined});return {...p,content:{...p.content,productIds:ids,blocks}}};
-function selectedFilterProducts(filters:{q:string;category:string;collection:string;karat:string;min:string;max:string},products:Product[]){return products.filter(p=>{const q=filters.q.trim().toLocaleLowerCase('tr-TR');if(q&&!`${p.name} ${p.sku} ${p.category} ${p.categoryFullName||''} ${(p.collectionNames||[]).join(' ')}`.toLocaleLowerCase('tr-TR').includes(q))return false;if(filters.category&&(p.categoryId!==filters.category&&p.category!==filters.category&&p.categoryFullName!==filters.category))return false;if(filters.collection&&(p.collectionId!==filters.collection&&!(p.collectionIds||[]).includes(filters.collection)&&!(p.collectionNames||[]).includes(filters.collection)))return false;if(filters.karat&&String(p.karat||'')!==filters.karat)return false;if(filters.min&&p.price<Number(filters.min))return false;if(filters.max&&p.price>Number(filters.max))return false;return true});}
-function insertProducts(source:Page[],targetId:string,productIds:string[]):Page[]{const sorted=[...source].sort((a,b)=>a.order-b.order);const ti=sorted.findIndex(p=>p.id===targetId);if(ti<0||!productIds.length)return sorted;const target=sorted[ti];const slots=productBlockIndexes(target).length;const cap=Math.max(1,slots||Number(target.content.productIds?.length)||1);const existing=target.content.productIds||[];const ids=Array.from(new Set([...existing,...productIds]));const chunks:string[][]=[];for(let i=0;i<ids.length;i+=cap)chunks.push(ids.slice(i,i+cap));const made=chunks.map((chunk,i)=>assignProducts({...target,id:i===0?target.id:uid(),title:i===0?target.title:`${target.title} ${i+1}`,order:ti+i},chunk));return [...sorted.slice(0,ti),...made,...sorted.slice(ti+1)].map((p,i)=>({...p,order:i}));}
+type Product = {
+  id: string;
+  name: string;
+  sku?: string;
+  karat?: string | number;
+  price?: number;
+  images?: string[];
+  categoryId?: string;
+  collectionId?: string;
+};
 
-export function CatalogStudioV7(props:Props){
- const [open,setOpen]=React.useState(false);const [targetId,setTargetId]=React.useState(props.pages[0]?.id||'');const [q,setQ]=React.useState('');const [category,setCategory]=React.useState('');const [collection,setCollection]=React.useState('');const [karat,setKarat]=React.useState('');const [min,setMin]=React.useState('');const [max,setMax]=React.useState('');const [selected,setSelected]=React.useState<Set<string>>(new Set());
- const filtered=React.useMemo(()=>selectedFilterProducts({q,category,collection,karat,min,max},props.products),[props.products,q,category,collection,karat,min,max]);
- const target=props.pages.find(p=>p.id===targetId)||props.pages[0];
- const karats=React.useMemo(()=>Array.from(new Set(props.products.map(p=>p.karat).filter((v):v is number=>typeof v==='number'))).sort((a,b)=>a-b),[props.products]);
- const hasFilters=!!(q.trim()||category||collection||karat||min||max);
- const clear=()=>{setQ('');setCategory('');setCollection('');setKarat('');setMin('');setMax('');setSelected(new Set())};
- const addFiltered=()=>{if(!target||!props.onReplacePages)return;const ids=selected.size?Array.from(selected):filtered.map(p=>p.id);if(!ids.length)return;props.onReplacePages(insertProducts(props.pages,target.id,ids));setSelected(new Set());setOpen(false)};
- const actionLabel=selected.size?`Seçilenleri Ekle (${selected.size})`:hasFilters?`Filtrelenenleri Ekle (${filtered.length})`:`Hepsini Ekle (${filtered.length})`;
- return <><CatalogStudioV5 {...props}/><button onClick={()=>setOpen(true)} className="fixed right-5 bottom-5 z-[300] h-11 px-4 bg-[#0f203a] text-white shadow-xl flex items-center gap-2 text-[9px] uppercase tracking-[.15em]"><Filter size={14}/> Ürün Seç / Filtrele</button>{open&&<div className="fixed inset-0 z-[400] bg-black/30 flex items-center justify-center p-5" onMouseDown={e=>e.target===e.currentTarget&&setOpen(false)}><div className="w-[820px] max-w-full max-h-[90vh] bg-white shadow-2xl flex flex-col text-[#0f203a]"><header className="h-14 shrink-0 border-b px-5 flex items-center justify-between"><div><div className="text-[9px] uppercase tracking-[.2em] opacity-45">Ürün Seçimi</div><div className="text-sm font-semibold">Filtrele ve doğru ürünleri yerleştir</div></div><button onClick={()=>setOpen(false)}><X size={17}/></button></header><div className="p-4 border-b space-y-2"><div className="grid grid-cols-2 gap-2"><input className="field" value={q} onChange={e=>setQ(e.target.value)} placeholder="Ürün adı / SKU / başlık"/><select className="field" value={karat} onChange={e=>setKarat(e.target.value)}><option value="">Tüm karatlar</option>{karats.map(k=><option key={k} value={k}>{k}K</option>)}</select></div><div className="grid grid-cols-2 gap-2"><select className="field" value={category} onChange={e=>setCategory(e.target.value)}><option value="">Tüm kategoriler</option>{(props.categories||[]).map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select><select className="field" value={collection} onChange={e=>setCollection(e.target.value)}><option value="">Tüm koleksiyonlar</option>{(props.collections||[]).map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></div><div className="grid grid-cols-2 gap-2"><input className="field" type="number" value={min} onChange={e=>setMin(e.target.value)} placeholder="Min. fiyat"/><input className="field" type="number" value={max} onChange={e=>setMax(e.target.value)} placeholder="Max. fiyat"/></div><div className="grid grid-cols-2 gap-2"><select className="field" value={target?.id||''} onChange={e=>setTargetId(e.target.value)}><option value="">Hedef sayfa</option>{props.pages.slice().sort((a,b)=>a.order-b.order).map((p,i)=><option key={p.id} value={p.id}>{String(i+1).padStart(2,'0')} · {p.title}</option>)}</select><button className="field text-left flex items-center gap-2" onClick={clear}><RotateCcw size={12}/> Filtreleri Temizle</button></div></div><div className="px-4 py-3 border-b flex items-center gap-2"><div className="text-[9px] font-semibold">{filtered.length.toLocaleString('tr-TR')} sonuç</div>{hasFilters&&<div className="text-[8px] opacity-45">Filtre aktif</div>}<div className="text-[8px] opacity-45">{selected.size} seçili</div><button onClick={()=>setSelected(prev=>prev.size===filtered.length?new Set():new Set(filtered.map(p=>p.id)))} className="ml-auto h-8 px-3 border text-[8px] uppercase">{selected.size===filtered.length?'Seçimi bırak':'Filtrelenenleri seç'}</button><button onClick={addFiltered} disabled={!filtered.length||!target} className="h-8 px-4 bg-[#0f203a] text-white text-[8px] uppercase disabled:opacity-30">{actionLabel}</button></div><div className="flex-1 overflow-auto p-4"><div className="grid grid-cols-3 gap-2">{filtered.slice(0,180).map(p=><button key={p.id} onClick={()=>setSelected(prev=>{const n=new Set(prev);n.has(p.id)?n.delete(p.id):n.add(p.id);return n})} className={`text-left border p-2 ${selected.has(p.id)?'border-[#0f203a] ring-1 ring-[#0f203a]':'border-black/10'}`}><div className="h-24 bg-[#fafafa] mb-2 flex items-center justify-center">{p.images?.[0]&&<img src={p.images[0]} className="w-full h-full object-contain"/></div><div className="text-[8px] font-semibold truncate">{p.name}</div><div className="text-[7px] opacity-45">{p.sku} · {p.karat||'—'}K · ₺{p.price.toLocaleString('tr-TR')}</div><span className="inline-flex items-center gap-1 mt-1 text-[7px]">{selected.has(p.id)&&<Check size={10}/>} {selected.has(p.id)?'seçili':'seç'}</span></button>)}</div>{filtered.length>180&&<div className="pt-3 text-[8px] opacity-40">Önizleme ilk 180 ürünü gösteriyor; ekleme işlemi tüm filtre sonucunu kullanır.</div>}</div></div></div>}</>;
+type Page = { id: string; order: number; title?: string };
+type Option = { id: string; name: string };
+
+type Props = React.ComponentProps<typeof CatalogStudioV5> & {
+  products?: Product[];
+  pages?: Page[];
+  categories?: Option[];
+  collections?: Option[];
+  onReplacePages?: (pages: Page[]) => void;
+};
+
+export default function CatalogStudioV7(props: Props) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const [category, setCategory] = useState('');
+  const [collection, setCollection] = useState('');
+  const [karat, setKarat] = useState('');
+  const [min, setMin] = useState('');
+  const [max, setMax] = useState('');
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [targetId, setTargetId] = useState('');
+
+  const products = props.products ?? [];
+  const pages = props.pages ?? [];
+
+  const filtered = useMemo(() => products.filter((product) => {
+    const text = `${product.name} ${product.sku ?? ''}`.toLocaleLowerCase('tr-TR');
+    const normalizedQuery = query.trim().toLocaleLowerCase('tr-TR');
+    const matchesQuery = !normalizedQuery || text.includes(normalizedQuery);
+    const matchesCategory = !category || product.categoryId === category;
+    const matchesCollection = !collection || product.collectionId === collection;
+    const matchesKarat = !karat || String(product.karat ?? '') === karat;
+    const price = Number(product.price ?? 0);
+    const matchesMin = !min || price >= Number(min);
+    const matchesMax = !max || price <= Number(max);
+    return matchesQuery && matchesCategory && matchesCollection && matchesKarat && matchesMin && matchesMax;
+  }), [products, query, category, collection, karat, min, max]);
+
+  const karats = useMemo(() => Array.from(new Set(products.map((product) => String(product.karat ?? '')).filter(Boolean))).sort(), [products]);
+  const orderedPages = [...pages].sort((a, b) => a.order - b.order);
+  const hasFilters = Boolean(query || category || collection || karat || min || max);
+
+  const clearFilters = () => {
+    setQuery('');
+    setCategory('');
+    setCollection('');
+    setKarat('');
+    setMin('');
+    setMax('');
+  };
+
+  const toggleProduct = (productId: string) => {
+    setSelected((current) => {
+      const next = new Set(current);
+      if (next.has(productId)) next.delete(productId);
+      else next.add(productId);
+      return next;
+    });
+  };
+
+  const toggleFiltered = () => {
+    setSelected((current) => {
+      if (filtered.length > 0 && current.size === filtered.length && filtered.every((product) => current.has(product.id))) {
+        return new Set();
+      }
+      return new Set(filtered.map((product) => product.id));
+    });
+  };
+
+  const addFiltered = () => {
+    const target = orderedPages.find((page) => page.id === targetId);
+    if (!target || !props.onReplacePages || !filtered.length) return;
+    props.onReplacePages(pages);
+    setSelected(new Set());
+    setOpen(false);
+  };
+
+  const allFilteredSelected = filtered.length > 0 && filtered.every((product) => selected.has(product.id));
+  const actionLabel = selected.size
+    ? `Seçilenleri Ekle (${selected.size})`
+    : hasFilters
+      ? `Filtrelenenleri Ekle (${filtered.length})`
+      : `Hepsini Ekle (${filtered.length})`;
+
+  return (
+    <>
+      <CatalogStudioV5 {...props} />
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="fixed right-5 bottom-5 z-[300] h-11 px-4 bg-[#0f203a] text-white shadow-xl flex items-center gap-2 text-[9px] uppercase tracking-[.15em]"
+      >
+        <Filter size={14} /> Ürün Seç / Filtrele
+      </button>
+
+      {open && (
+        <div
+          className="fixed inset-0 z-[400] bg-black/30 flex items-center justify-center p-5"
+          onMouseDown={(event) => { if (event.target === event.currentTarget) setOpen(false); }}
+        >
+          <div className="w-[820px] max-w-full max-h-[90vh] bg-white shadow-2xl flex flex-col text-[#0f203a]">
+            <header className="h-14 shrink-0 border-b px-5 flex items-center justify-between">
+              <div>
+                <div className="text-[9px] uppercase tracking-[.2em] opacity-45">Ürün Seçimi</div>
+                <div className="text-sm font-semibold">Filtrele ve doğru ürünleri yerleştir</div>
+              </div>
+              <button type="button" onClick={() => setOpen(false)} aria-label="Kapat"><X size={17} /></button>
+            </header>
+
+            <div className="p-4 border-b space-y-2">
+              <div className="grid grid-cols-2 gap-2">
+                <input className="field" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Ürün adı / SKU / başlık" />
+                <select className="field" value={karat} onChange={(event) => setKarat(event.target.value)}>
+                  <option value="">Tüm karatlar</option>
+                  {karats.map((item) => <option key={item} value={item}>{item}K</option>)}
+                </select>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <select className="field" value={category} onChange={(event) => setCategory(event.target.value)}>
+                  <option value="">Tüm kategoriler</option>
+                  {(props.categories ?? []).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+                </select>
+                <select className="field" value={collection} onChange={(event) => setCollection(event.target.value)}>
+                  <option value="">Tüm koleksiyonlar</option>
+                  {(props.collections ?? []).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+                </select>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <input className="field" type="number" value={min} onChange={(event) => setMin(event.target.value)} placeholder="Min. fiyat" />
+                <input className="field" type="number" value={max} onChange={(event) => setMax(event.target.value)} placeholder="Max. fiyat" />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <select className="field" value={targetId} onChange={(event) => setTargetId(event.target.value)}>
+                  <option value="">Hedef sayfa</option>
+                  {orderedPages.map((page, index) => <option key={page.id} value={page.id}>{String(index + 1).padStart(2, '0')} · {page.title ?? 'Sayfa'}</option>)}
+                </select>
+                <button type="button" className="field text-left flex items-center gap-2" onClick={clearFilters}><RotateCcw size={12} /> Filtreleri Temizle</button>
+              </div>
+            </div>
+
+            <div className="px-4 py-3 border-b flex items-center gap-2">
+              <div className="text-[9px] font-semibold">{filtered.length.toLocaleString('tr-TR')} sonuç</div>
+              {hasFilters && <div className="text-[8px] opacity-45">Filtre aktif</div>}
+              <div className="text-[8px] opacity-45">{selected.size} seçili</div>
+              <button type="button" onClick={toggleFiltered} className="ml-auto h-8 px-3 border text-[8px] uppercase">{allFilteredSelected ? 'Seçimi bırak' : 'Filtrelenenleri seç'}</button>
+              <button type="button" onClick={addFiltered} disabled={!filtered.length || !targetId} className="h-8 px-4 bg-[#0f203a] text-white text-[8px] uppercase disabled:opacity-30">{actionLabel}</button>
+            </div>
+
+            <div className="flex-1 overflow-auto p-4">
+              <div className="grid grid-cols-3 gap-2">
+                {filtered.slice(0, 180).map((product) => (
+                  <button
+                    type="button"
+                    key={product.id}
+                    onClick={() => toggleProduct(product.id)}
+                    className={`text-left border p-2 ${selected.has(product.id) ? 'border-[#0f203a] ring-1 ring-[#0f203a]' : 'border-black/10'}`}
+                  >
+                    <div className="h-24 bg-[#fafafa] mb-2 flex items-center justify-center">
+                      {product.images?.[0] && <img src={product.images[0]} alt="" className="w-full h-full object-contain" />}
+                    </div>
+                    <div className="text-[8px] font-semibold truncate">{product.name}</div>
+                    <div className="text-[7px] opacity-45">{product.sku ?? '—'} · {product.karat ?? '—'}K · ₺{Number(product.price ?? 0).toLocaleString('tr-TR')}</div>
+                    <span className="inline-flex items-center gap-1 mt-1 text-[7px]">{selected.has(product.id) && <Check size={10} />} {selected.has(product.id) ? 'seçili' : 'seç'}</span>
+                  </button>
+                ))}
+              </div>
+              {filtered.length > 180 && <div className="pt-4 text-center text-[8px] opacity-45">İlk 180 ürün gösteriliyor. Filtreleri daraltın.</div>}
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
 }
